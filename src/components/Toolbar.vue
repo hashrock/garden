@@ -97,8 +97,22 @@
         </button>
       </div>
       
-      <div class="ml-auto text-sm text-gray-600">
-        画像: {{ imageCount }}枚
+      <div class="ml-auto flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <label class="text-sm text-gray-600">入力モード:</label>
+          <button
+            @click="handleToggleInputMode"
+            class="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm flex items-center gap-2"
+            :title="inputModeDescription"
+          >
+            <span v-if="inputMode === 'mouse'">🖱️ マウス</span>
+            <span v-else>👆 トラックパッド</span>
+          </button>
+        </div>
+        
+        <div class="text-sm text-gray-600">
+          画像: {{ imageCount }}枚
+        </div>
       </div>
     </div>
   </div>
@@ -107,6 +121,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useProjectIO } from '../composables/useProjectIO'
+import { useInputMode } from '../composables/useInputMode'
 import type { ImageItem } from '../types'
 
 const props = defineProps<{
@@ -128,10 +143,16 @@ const emit = defineEmits<{
 }>()
 
 const projectIO = useProjectIO()
+const inputModeManager = useInputMode()
 
 const imageCount = computed(() => props.images.length)
 const selectedCount = computed(() => props.selectedImageIds.size)
 const zoomLevel = computed(() => props.viewport.zoom)
+const inputMode = computed(() => inputModeManager.currentMode.value)
+const inputModeDescription = computed(() => {
+  const desc = inputModeManager.currentModeDescription.value
+  return `${desc.description}\nパン: ${desc.pan}\nズーム: ${desc.zoom}`
+})
 
 const handleNew = () => {
   if (confirm('現在のプロジェクトを破棄して新規作成しますか？')) {
@@ -212,5 +233,9 @@ const handleZoomOut = () => {
 
 const handleResetView = () => {
   emit('resetViewport')
+}
+
+const handleToggleInputMode = () => {
+  inputModeManager.toggleMode()
 }
 </script>

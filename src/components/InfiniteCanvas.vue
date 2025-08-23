@@ -25,12 +25,14 @@
         'cursor-grabbing': isPanning,
         'cursor-crosshair': isSelecting
       }"
-      @mousedown="handleMouseDown"
-      @mousemove="handleMouseMove"
-      @mouseup="handleMouseUp"
+      @pointerdown="handlePointerDown"
+      @pointermove="handlePointerMove"
+      @pointerup="handlePointerUp"
+      @pointercancel="handlePointerCancel"
       @wheel="handleWheel"
       @dragover.prevent
       @drop="handleDrop"
+      style="touch-action: none"
     />
     
     <div
@@ -53,6 +55,8 @@ import { useCanvas } from '../composables/useCanvas'
 import { useImageManager } from '../composables/useImageManager'
 import { useSelection } from '../composables/useSelection'
 import { useDragResize } from '../composables/useDragResize'
+import { useTouch } from '../composables/useTouch'
+import { useInputMode } from '../composables/useInputMode'
 import type { Point, ImageItem } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -64,22 +68,52 @@ const canvas = useCanvas(canvasRef)
 const imageManager = useImageManager()
 const selection = useSelection()
 const dragResize = useDragResize()
+const touch = useTouch()
+const inputMode = useInputMode()
+
+const isSpacePressed = ref(false)
 
 const { isPanning, viewport, screenToCanvas, startPan, updatePan, endPan, zoom, resetViewport } = canvas
 const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, selectAll, clearAllImages, addImage } = imageManager
 const { isSelecting, selectionRect, startSelection, updateSelection, endSelection } = selection
 const { isDragging, isResizing, startDrag, updateDrag, endDrag, getResizeHandle, startResize, updateResize, endResize, getCursor } = dragResize
 
-const handleMouseDown = (e: MouseEvent) => {
-  const screenPoint = { x: e.offsetX, y: e.offsetY }
-  const canvasPoint = screenToCanvas(e.offsetX, e.offsetY)
+const handlePointerDown = (e: PointerEvent) => {
+  if (!canvasRef.value) return
+  canvasRef.value.setPointerCapture(e.pointerId)
   
-  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+  const config = inputMode.getInputConfig()
+  
+  touch.addPointer(e)
+  
+  // タッチジェスチャーが有効な場合のピンチ処理
+  if (config.enableTouchGestures && touch.pointerCount.value === 2) {
+    endPan()
+    endDrag()
+    endResize()
+    endSelection()
+    touch.startPinch(viewport.value.zoom)
+    return
+  }
+  
+  if (touch.pointerCount.value > 2) return
+  
+  const rect = canvasRef.value.getBoundingClientRect()
+  const screenPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  const canvasPoint = screenToCanvas(screenPoint.x, screenPoint.y)
+  
+  // パン操作の判定
+  const shouldPan = 
+    (config.enableMiddleButtonPan && e.button === 1) ||
+    (config.enableAltPan && e.button === 0 && e.altKey) ||
+    (config.enableSpacePan && e.button === 0 && isSpacePressed.value)
+  
+  if (shouldPan) {
     startPan(e.clientX, e.clientY)
     return
   }
   
-  if (e.button === 0) {
+  if (e.button === 0 && e.pointerType !== 'touch') {
     const clickedImage = getImageAt(canvasPoint)
     
     if (clickedImage) {
@@ -103,12 +137,50 @@ const handleMouseDown = (e: MouseEvent) => {
       }
       startSelection(screenPoint)
     }
+  } else if (e.pointerType === 'touch') {
+    const clickedImage = getImageAt(canvasPoint)
+    
+    if (clickedImage) {
+      if (!selectedImageIds.value.has(clickedImage.id)) {
+        selectImage(clickedImage.id, false)
+      }
+      const selectedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
+      startDrag(clickedImage, canvasPoint, selectedImages)
+    } else {
+      startPan(e.clientX, e.clientY)
+    }
   }
 }
 
-const handleMouseMove = (e: MouseEvent) => {
-  const screenPoint = { x: e.offsetX, y: e.offsetY }
-  const canvasPoint = screenToCanvas(e.offsetX, e.offsetY)
+const handlePointerMove = (e: PointerEvent) => {
+  if (!canvasRef.value) return
+  
+  const config = inputMode.getInputConfig()
+  
+  touch.updatePointer(e)
+  
+  if (config.enableTouchGestures && touch.isPinching.value) {
+    const pinchData = touch.updatePinch()
+    if (pinchData) {
+      const initialZoom = touch.initialPinchZoom
+      const newZoom = initialZoom.value * pinchData.scale
+      const clampedZoom = Math.max(0.1, Math.min(5, newZoom))
+      viewport.value.zoom = clampedZoom
+      
+      const rect = canvasRef.value.getBoundingClientRect()
+      const centerX = pinchData.center.x - rect.left
+      const centerY = pinchData.center.y - rect.top
+      
+      const scale = clampedZoom / initialZoom.value
+      viewport.value.x = centerX - (centerX - viewport.value.x) * scale
+      viewport.value.y = centerY - (centerY - viewport.value.y) * scale
+    }
+    return
+  }
+  
+  const rect = canvasRef.value.getBoundingClientRect()
+  const screenPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  const canvasPoint = screenToCanvas(screenPoint.x, screenPoint.y)
   
   if (isPanning.value) {
     updatePan(e.clientX, e.clientY)
@@ -118,7 +190,7 @@ const handleMouseMove = (e: MouseEvent) => {
     updateResize(canvasPoint, e.shiftKey)
   } else if (isSelecting.value) {
     updateSelection(screenPoint)
-  } else {
+  } else if (e.pointerType !== 'touch') {
     const hoveredImage = getImageAt(canvasPoint)
     if (hoveredImage && selectedImageIds.value.has(hoveredImage.id)) {
       const handle = getResizeHandle(hoveredImage, canvasPoint)
@@ -131,7 +203,18 @@ const handleMouseMove = (e: MouseEvent) => {
   }
 }
 
-const handleMouseUp = (e: MouseEvent) => {
+const handlePointerUp = (e: PointerEvent) => {
+  if (!canvasRef.value) return
+  canvasRef.value.releasePointerCapture(e.pointerId)
+  
+  touch.removePointer(e)
+  
+  if (touch.isPinching.value && touch.pointerCount.value < 2) {
+    touch.endPinch()
+  }
+  
+  if (touch.pointerCount.value > 0) return
+  
   if (isPanning.value) {
     endPan()
   } else if (isDragging.value) {
@@ -161,10 +244,54 @@ const handleMouseUp = (e: MouseEvent) => {
   }
 }
 
+const handlePointerCancel = (e: PointerEvent) => {
+  if (!canvasRef.value) return
+  canvasRef.value.releasePointerCapture(e.pointerId)
+  
+  touch.removePointer(e)
+  
+  if (touch.pointerCount.value === 0) {
+    touch.clearPointers()
+    endPan()
+    endDrag()
+    endResize()
+    endSelection()
+  }
+}
+
 const handleWheel = (e: WheelEvent) => {
   e.preventDefault()
-  const delta = e.deltaY > 0 ? -1 : 1
-  zoom(delta, e.offsetX, e.offsetY)
+  
+  if (!canvasRef.value) return
+  const config = inputMode.getInputConfig()
+  const rect = canvasRef.value.getBoundingClientRect()
+  const offsetX = e.clientX - rect.left
+  const offsetY = e.clientY - rect.top
+  
+  // トラックパッドモード: Ctrl+ホイールでズーム
+  if (config.enableCtrlWheelZoom && e.ctrlKey) {
+    const pinchData = touch.handleTrackpadPinch(e)
+    if (pinchData) {
+      const currentZoom = viewport.value.zoom
+      const newZoom = currentZoom * pinchData.scale
+      const clampedZoom = Math.max(0.1, Math.min(5, newZoom))
+      
+      const scale = clampedZoom / currentZoom
+      viewport.value.zoom = clampedZoom
+      viewport.value.x = offsetX - (offsetX - viewport.value.x) * scale
+      viewport.value.y = offsetY - (offsetY - viewport.value.y) * scale
+    }
+  } 
+  // マウスモード: ホイールでズーム（Ctrlなし）
+  else if (config.enableWheelZoom && !e.ctrlKey) {
+    const delta = e.deltaY > 0 ? -1 : 1
+    zoom(delta, offsetX, offsetY)
+  }
+  // トラックパッドモードで2本指スクロール（パン）
+  else if (config.enableTwoFingerPan && !e.ctrlKey) {
+    viewport.value.x -= e.deltaX
+    viewport.value.y -= e.deltaY
+  }
 }
 
 const handleDrop = async (e: DragEvent) => {
@@ -194,7 +321,13 @@ const handlePaste = async (e: ClipboardEvent) => {
 }
 
 const handleKeyDown = (e: KeyboardEvent) => {
-  if (e.key === 'Delete' || e.key === 'Backspace') {
+  if (e.key === ' ' || e.key === 'Space') {
+    e.preventDefault()
+    isSpacePressed.value = true
+    if (canvasRef.value) {
+      canvasRef.value.style.cursor = 'grab'
+    }
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
     removeSelectedImages()
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
     e.preventDefault()
@@ -202,6 +335,15 @@ const handleKeyDown = (e: KeyboardEvent) => {
   } else if (e.key === 'Escape') {
     clearSelection()
     endSelection()
+  }
+}
+
+const handleKeyUp = (e: KeyboardEvent) => {
+  if (e.key === ' ' || e.key === 'Space') {
+    isSpacePressed.value = false
+    if (canvasRef.value && !isPanning.value) {
+      canvasRef.value.style.cursor = 'default'
+    }
   }
 }
 
@@ -327,6 +469,7 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
   window.addEventListener('paste', handlePaste)
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
   draw()
 })
 
@@ -334,6 +477,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('paste', handlePaste)
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('keyup', handleKeyUp)
 })
 
 watch([images, viewport, selectedImageIds], () => {
