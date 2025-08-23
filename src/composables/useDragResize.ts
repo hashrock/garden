@@ -1,15 +1,19 @@
 import { ref, computed } from 'vue'
-import type { Point, Size, ImageItem } from '../types'
+import type { Point, Size, ImageItem, Group } from '../types'
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null
 
 export function useDragResize() {
   const isDragging = ref(false)
+  const isDraggingGroup = ref(false)
   const isResizing = ref(false)
   const dragStart = ref<Point | null>(null)
   const draggedImage = ref<ImageItem | null>(null)
   const draggedImages = ref<ImageItem[]>([])
+  const draggedGroup = ref<Group | null>(null)
+  const draggedGroups = ref<Group[]>([])
   const initialPositions = ref<Map<string, Point>>(new Map())
+  const initialGroupPositions = ref<Map<string, Point>>(new Map())
   
   const resizeHandle = ref<ResizeHandle>(null)
   const resizeStart = ref<Point | null>(null)
@@ -48,10 +52,55 @@ export function useDragResize() {
 
   const endDrag = () => {
     isDragging.value = false
+    isDraggingGroup.value = false
     dragStart.value = null
     draggedImage.value = null
     draggedImages.value = []
+    draggedGroup.value = null
+    draggedGroups.value = []
     initialPositions.value.clear()
+    initialGroupPositions.value.clear()
+  }
+
+  const startDragGroup = (group: Group, startPoint: Point, selectedGroups: Group[] = []) => {
+    isDraggingGroup.value = true
+    dragStart.value = startPoint
+    draggedGroup.value = group
+    draggedGroups.value = selectedGroups.length > 0 ? selectedGroups : [group]
+    
+    initialGroupPositions.value.clear()
+    draggedGroups.value.forEach(g => {
+      initialGroupPositions.value.set(g.id, { ...g.position })
+    })
+  }
+
+  const updateDragGroup = (currentPoint: Point, images: ImageItem[]) => {
+    if (!isDraggingGroup.value || !dragStart.value) return
+
+    const deltaX = currentPoint.x - dragStart.value.x
+    const deltaY = currentPoint.y - dragStart.value.y
+
+    draggedGroups.value.forEach(group => {
+      const initialPos = initialGroupPositions.value.get(group.id)
+      if (initialPos) {
+        const oldPosition = { ...group.position }
+        group.position = {
+          x: initialPos.x + deltaX,
+          y: initialPos.y + deltaY
+        }
+        
+        const groupDeltaX = group.position.x - oldPosition.x
+        const groupDeltaY = group.position.y - oldPosition.y
+        
+        group.children.forEach(childId => {
+          const image = images.find(img => img.id === childId)
+          if (image) {
+            image.position.x += groupDeltaX
+            image.position.y += groupDeltaY
+          }
+        })
+      }
+    })
   }
 
   const getResizeHandle = (image: ImageItem, point: Point, handleSize: number = 10): ResizeHandle => {
@@ -188,11 +237,14 @@ export function useDragResize() {
 
   return {
     isDragging: computed(() => isDragging.value),
+    isDraggingGroup: computed(() => isDraggingGroup.value),
     isResizing: computed(() => isResizing.value),
     resizeHandle: computed(() => resizeHandle.value),
     startDrag,
     updateDrag,
     endDrag,
+    startDragGroup,
+    updateDragGroup,
     getResizeHandle,
     startResize,
     updateResize,

@@ -60,6 +60,15 @@
         </button>
         
         <button
+          @click="handleGroup"
+          class="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded text-sm"
+          title="グループ化 (Ctrl+G)"
+          :disabled="selectedCount < 2 && selectedGroupCount === 0"
+        >
+          {{ selectedGroupCount > 0 ? 'グループ解除' : 'グループ化' }}
+        </button>
+        
+        <button
           @click="handleDelete"
           class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm"
           title="選択を削除 (Delete)"
@@ -127,6 +136,7 @@ import type { ImageItem } from '../types'
 const props = defineProps<{
   images: ImageItem[]
   selectedImageIds: Set<string>
+  selectedGroupIds?: Set<string>
   viewport: { x: number; y: number; zoom: number }
   canvasSize: { width: number; height: number }
 }>()
@@ -140,6 +150,8 @@ const emit = defineEmits<{
   clearSelection: []
   zoom: [delta: number, centerX: number, centerY: number]
   resetViewport: []
+  createGroup: []
+  ungroupSelected: []
 }>()
 
 const projectIO = useProjectIO()
@@ -147,6 +159,7 @@ const inputModeManager = useInputMode()
 
 const imageCount = computed(() => props.images.length)
 const selectedCount = computed(() => props.selectedImageIds.size)
+const selectedGroupCount = computed(() => props.selectedGroupIds?.size || 0)
 const zoomLevel = computed(() => props.viewport.zoom)
 const inputMode = computed(() => inputModeManager.currentMode.value)
 const inputModeDescription = computed(() => {
@@ -237,5 +250,13 @@ const handleResetView = () => {
 
 const handleToggleInputMode = () => {
   inputModeManager.toggleMode()
+}
+
+const handleGroup = () => {
+  if (selectedGroupCount.value > 0) {
+    emit('ungroupSelected')
+  } else if (selectedCount.value >= 2) {
+    emit('createGroup')
+  }
 }
 </script>

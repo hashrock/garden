@@ -3,6 +3,7 @@
     <Toolbar
       :images="images"
       :selectedImageIds="selectedImageIds"
+      :selectedGroupIds="selectedGroupIds"
       :viewport="viewport"
       :canvasSize="{ width: 10000, height: 10000 }"
       @newProject="handleNewProject"
@@ -13,6 +14,8 @@
       @clearSelection="clearSelection"
       @zoom="handleZoomFromToolbar"
       @resetViewport="resetViewport"
+      @createGroup="handleCreateGroup"
+      @ungroupSelected="handleUngroupSelected"
     />
     
     <canvas
@@ -59,7 +62,8 @@ import { useDragResize } from '../composables/useDragResize'
 import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
-import type { Point, ImageItem } from '../types'
+import { useGroupManager } from '../composables/useGroupManager'
+import type { Point, ImageItem, Group } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const headerHeight = 48
@@ -73,6 +77,7 @@ const dragResize = useDragResize()
 const touch = useTouch()
 const inputMode = useInputMode()
 const imageCache = useImageCache()
+const groupManager = useGroupManager()
 
 const isSpacePressed = ref(false)
 const animationFrameId = ref<number | null>(null)
@@ -80,7 +85,8 @@ const animationFrameId = ref<number | null>(null)
 const { isPanning, viewport, screenToCanvas, startPan, updatePan, endPan, zoom, resetViewport } = canvas
 const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, selectAll, clearAllImages, addImage } = imageManager
 const { isSelecting, selectionRect, startSelection, updateSelection, endSelection } = selection
-const { isDragging, isResizing, startDrag, updateDrag, endDrag, getResizeHandle, startResize, updateResize, endResize, getCursor } = dragResize
+const { isDragging, isDraggingGroup, isResizing, startDrag, updateDrag, endDrag, startDragGroup, updateDragGroup, getResizeHandle, startResize, updateResize, endResize, getCursor } = dragResize
+const { groups, selectedGroupIds, getGroupAt, selectGroup, clearGroupSelection, createGroupFromSelection, ungroupItems, moveGroupChildren } = groupManager
 
 const handlePointerDown = (e: PointerEvent) => {
   if (!canvasRef.value) return
@@ -119,9 +125,27 @@ const handlePointerDown = (e: PointerEvent) => {
   }
   
   if (e.button === 0 && e.pointerType !== 'touch') {
+    const clickedGroup = getGroupAt(canvasPoint)
     const clickedImage = getImageAt(canvasPoint)
     
-    if (clickedImage) {
+    if (clickedGroup && !clickedImage) {
+      if (e.ctrlKey || e.metaKey) {
+        if (selectedGroupIds.value.has(clickedGroup.id)) {
+          groupManager.deselectGroup(clickedGroup.id)
+        } else {
+          selectGroup(clickedGroup.id, true)
+        }
+      } else {
+        clearSelection()
+        clearGroupSelection()
+        selectGroup(clickedGroup.id)
+      }
+      
+      const selectedGroups = groups.value.filter(g => selectedGroupIds.value.has(g.id))
+      if (selectedGroups.length > 0) {
+        dragResize.startDragGroup(clickedGroup, canvasPoint, selectedGroups)
+      }
+    } else if (clickedImage) {
       const handle = getResizeHandle(clickedImage, canvasPoint)
       
       if (handle && selectedImageIds.value.has(clickedImage.id)) {
@@ -139,6 +163,7 @@ const handlePointerDown = (e: PointerEvent) => {
     } else {
       if (!e.ctrlKey && !e.metaKey) {
         clearSelection()
+        clearGroupSelection()
       }
       startSelection(screenPoint)
     }
@@ -189,6 +214,8 @@ const handlePointerMove = (e: PointerEvent) => {
   
   if (isPanning.value) {
     updatePan(e.clientX, e.clientY)
+  } else if (isDraggingGroup.value) {
+    updateDragGroup(canvasPoint, images.value)
   } else if (isDragging.value) {
     updateDrag(canvasPoint)
   } else if (isResizing.value) {
@@ -222,6 +249,8 @@ const handlePointerUp = (e: PointerEvent) => {
   
   if (isPanning.value) {
     endPan()
+  } else if (isDraggingGroup.value) {
+    endDrag()
   } else if (isDragging.value) {
     endDrag()
   } else if (isResizing.value) {
@@ -338,6 +367,22 @@ const handleKeyDown = (e: KeyboardEvent) => {
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
     e.preventDefault()
     imageManager.selectAll()
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+    e.preventDefault()
+    const selectedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
+    if (selectedImages.length > 0) {
+      const group = createGroupFromSelection(selectedImages)
+      if (group) {
+        clearSelection()
+        selectGroup(group.id)
+      }
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'g') {
+    e.preventDefault()
+    selectedGroupIds.value.forEach(groupId => {
+      ungroupItems(groupId, images.value)
+    })
+    clearGroupSelection()
   } else if (e.key === 'Escape') {
     clearSelection()
     endSelection()
@@ -379,6 +424,24 @@ const handleZoomFromToolbar = (delta: number, centerX: number, centerY: number) 
   zoom(delta, centerX, centerY)
 }
 
+const handleCreateGroup = () => {
+  const selectedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
+  if (selectedImages.length >= 2) {
+    const group = createGroupFromSelection(selectedImages)
+    if (group) {
+      clearSelection()
+      selectGroup(group.id)
+    }
+  }
+}
+
+const handleUngroupSelected = () => {
+  selectedGroupIds.value.forEach(groupId => {
+    ungroupItems(groupId, images.value)
+  })
+  clearGroupSelection()
+}
+
 const draw = () => {
   if (!canvasRef.value) return
   
@@ -412,6 +475,52 @@ const draw = () => {
     ctx.moveTo(0, y)
     ctx.lineTo(10000, y)
     ctx.stroke()
+  }
+  
+  // グループの描画
+  const sortedGroups = [...groups.value].sort((a, b) => a.zIndex - b.zIndex)
+  for (const group of sortedGroups) {
+    // グループの背景
+    if (group.backgroundColor) {
+      ctx.fillStyle = group.backgroundColor
+      ctx.fillRect(
+        group.position.x,
+        group.position.y,
+        group.size.width,
+        group.size.height
+      )
+    }
+    
+    // グループの枠線
+    ctx.strokeStyle = group.borderColor || '#d0d0d0'
+    ctx.lineWidth = 2 / viewport.value.zoom
+    ctx.strokeRect(
+      group.position.x,
+      group.position.y,
+      group.size.width,
+      group.size.height
+    )
+    
+    // グループ名の表示
+    ctx.fillStyle = '#666'
+    ctx.font = `${14 / viewport.value.zoom}px sans-serif`
+    ctx.fillText(
+      group.name,
+      group.position.x + 5 / viewport.value.zoom,
+      group.position.y - 5 / viewport.value.zoom
+    )
+    
+    // 選択状態の表示
+    if (selectedGroupIds.value.has(group.id)) {
+      ctx.strokeStyle = '#3b82f6'
+      ctx.lineWidth = 3 / viewport.value.zoom
+      ctx.strokeRect(
+        group.position.x,
+        group.position.y,
+        group.size.width,
+        group.size.height
+      )
+    }
   }
   
   // 画像の描画（キャッシュを使用）
