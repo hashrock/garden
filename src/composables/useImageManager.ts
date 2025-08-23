@@ -1,8 +1,10 @@
 import { ref, computed } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import type { ImageItem, Point, Size } from '../types'
+import { useSettingsStore } from '../stores/settings'
 
 export function useImageManager() {
+  const settingsStore = useSettingsStore()
   const images = ref<ImageItem[]>([])
   const selectedImageIds = ref<Set<string>>(new Set())
   let nextZIndex = 1
@@ -11,7 +13,7 @@ export function useImageManager() {
     images.value.filter(img => selectedImageIds.value.has(img.id))
   )
 
-  const addImage = async (file: File, position: Point = { x: 100, y: 100 }): Promise<ImageItem | null> => {
+  const addImage = async (file: File, position: Point = { x: 100, y: 100 }, offset: number = 0): Promise<ImageItem | null> => {
     return new Promise((resolve) => {
       const reader = new FileReader()
       
@@ -20,12 +22,21 @@ export function useImageManager() {
         const img = new Image()
         
         img.onload = () => {
+          // Apply stagger offset for bulk uploads
+          const staggerOffset = offset * 30
+          
+          // Get scaled dimensions
+          const scaledSize = settingsStore.getScaledDimensions(img.width, img.height)
+          
           const imageItem: ImageItem = {
             id: uuidv4(),
             filename: file.name,
             dataUrl,
-            position,
-            size: { width: img.width, height: img.height },
+            position: { 
+              x: position.x + staggerOffset, 
+              y: position.y + staggerOffset 
+            },
+            size: scaledSize,
             originalSize: { width: img.width, height: img.height },
             rotation: 0,
             zIndex: nextZIndex++,
@@ -51,17 +62,26 @@ export function useImageManager() {
     })
   }
 
-  const addImageFromDataUrl = async (dataUrl: string, filename: string = 'pasted-image.png', position: Point = { x: 100, y: 100 }): Promise<ImageItem | null> => {
+  const addImageFromDataUrl = async (dataUrl: string, filename: string = 'pasted-image.png', position: Point = { x: 100, y: 100 }, offset: number = 0): Promise<ImageItem | null> => {
     return new Promise((resolve) => {
       const img = new Image()
       
       img.onload = () => {
+        // Apply stagger offset for bulk pastes
+        const staggerOffset = offset * 30
+        
+        // Get scaled dimensions
+        const scaledSize = settingsStore.getScaledDimensions(img.width, img.height)
+        
         const imageItem: ImageItem = {
           id: uuidv4(),
           filename,
           dataUrl,
-          position,
-          size: { width: img.width, height: img.height },
+          position: { 
+            x: position.x + staggerOffset, 
+            y: position.y + staggerOffset 
+          },
+          size: scaledSize,
           originalSize: { width: img.width, height: img.height },
           rotation: 0,
           zIndex: nextZIndex++,

@@ -74,6 +74,22 @@
           </div>
         </div>
 
+        <!-- Image Settings -->
+        <div class="mb-6">
+          <h3 class="text-sm font-medium text-gray-700 mb-3">Image Settings</h3>
+          <div class="space-y-3">
+            <label class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg cursor-pointer">
+              <span class="text-sm text-gray-700">Auto-scale large images</span>
+              <input
+                type="checkbox"
+                v-model="autoScaleImages"
+                @change="toggleAutoScale"
+                class="rounded border-gray-300"
+              />
+            </label>
+          </div>
+        </div>
+
         <!-- Navigation Settings -->
         <div class="mb-6">
           <h3 class="text-sm font-medium text-gray-700 mb-3">Navigation</h3>
@@ -156,6 +172,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useInputMode } from '../composables/useInputMode'
+import { useSettingsStore } from '../stores/settings'
 
 defineProps<{
   imageCount: number
@@ -167,7 +184,9 @@ defineEmits<{
 }>()
 
 const inputModeManager = useInputMode()
+const settingsStore = useSettingsStore()
 const inputMode = ref('mouse')
+const autoScaleImages = ref(settingsStore.autoScaleImages)
 const settings = ref({
   enableSpacePan: true,
   enableRightButtonPan: false,
@@ -217,5 +236,9 @@ const updateSettings = () => {
   // Custom settings override
   const currentConfig = inputModeManager.getInputConfig()
   Object.assign(currentConfig, settings.value)
+}
+
+const toggleAutoScale = () => {
+  settingsStore.toggleAutoScaleImages()
 }
 </script>

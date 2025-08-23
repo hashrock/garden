@@ -103,6 +103,14 @@
       @save="handleSaveArtboardName"
       @close="editingArtboard = null"
     />
+    
+    <!-- Tidy Suggestion -->
+    <TidySuggestion
+      :show="showTidySuggestion"
+      :imageCount="recentlyAddedImages.length"
+      @tidy="handleTidySuggestion"
+      @dismiss="dismissTidySuggestion"
+    />
   </div>
 </template>
 
@@ -112,6 +120,7 @@ import FloatingToolbar from './FloatingToolbar.vue'
 import ContextMenu from './ContextMenu.vue'
 import ImageTextEditor from './ImageTextEditor.vue'
 import ArtboardNameEditor from './ArtboardNameEditor.vue'
+import TidySuggestion from './TidySuggestion.vue'
 import { useCanvas } from '../composables/useCanvas'
 import { useImageManager } from '../composables/useImageManager'
 import { useSelection } from '../composables/useSelection'
@@ -135,6 +144,8 @@ const editingImage = ref<ImageItem | null>(null)
 const textEditorPosition = ref({ x: 0, y: 0 })
 const editingArtboard = ref<Artboard | null>(null)
 const artboardEditorPosition = ref({ x: 0, y: 0 })
+const showTidySuggestion = ref(false)
+const recentlyAddedImages = ref<ImageItem[]>([])
 
 const canvas = useCanvas(canvasRef)
 const imageManager = useImageManager()
@@ -480,23 +491,44 @@ const handleDrop = async (e: DragEvent) => {
   const imageFiles = files.filter(file => file.type.startsWith('image/'))
   
   const dropPoint = screenToCanvas(e.offsetX, e.offsetY)
+  const addedImages: ImageItem[] = []
   
-  for (const file of imageFiles) {
-    await imageManager.addImage(file, dropPoint)
+  for (let i = 0; i < imageFiles.length; i++) {
+    const image = await imageManager.addImage(imageFiles[i], dropPoint, i)
+    if (image) {
+      addedImages.push(image)
+    }
+  }
+  
+  // Show tidy suggestion for multiple dropped images
+  if (addedImages.length > 1) {
+    recentlyAddedImages.value = addedImages
+    showTidySuggestion.value = true
   }
 }
 
 const handlePaste = async (e: ClipboardEvent) => {
   const items = Array.from(e.clipboardData?.items || [])
+  const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
+  const addedImages: ImageItem[] = []
   
+  let imageIndex = 0
   for (const item of items) {
     if (item.type.startsWith('image/')) {
       const blob = item.getAsFile()
       if (blob) {
-        const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
-        await imageManager.addImage(blob, centerPoint)
+        const image = await imageManager.addImage(blob, centerPoint, imageIndex++)
+        if (image) {
+          addedImages.push(image)
+        }
       }
     }
+  }
+  
+  // Show tidy suggestion for multiple pasted images
+  if (addedImages.length > 1) {
+    recentlyAddedImages.value = addedImages
+    showTidySuggestion.value = true
   }
 }
 
@@ -590,8 +622,19 @@ const handleAddImageFromContext = () => {
   input.onchange = async (event) => {
     const files = Array.from((event.target as HTMLInputElement).files || [])
     const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
-    for (const file of files) {
-      await imageManager.addImage(file, centerPoint)
+    const addedImages: ImageItem[] = []
+    
+    for (let i = 0; i < files.length; i++) {
+      const image = await imageManager.addImage(files[i], centerPoint, i)
+      if (image) {
+        addedImages.push(image)
+      }
+    }
+    
+    // Show tidy suggestion for bulk uploads
+    if (addedImages.length > 1) {
+      recentlyAddedImages.value = addedImages
+      showTidySuggestion.value = true
     }
   }
   input.click()
@@ -615,8 +658,19 @@ const handleAddImageFromEmpty = () => {
   input.onchange = async (event) => {
     const files = Array.from((event.target as HTMLInputElement).files || [])
     const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
-    for (const file of files) {
-      await imageManager.addImage(file, centerPoint)
+    const addedImages: ImageItem[] = []
+    
+    for (let i = 0; i < files.length; i++) {
+      const image = await imageManager.addImage(files[i], centerPoint, i)
+      if (image) {
+        addedImages.push(image)
+      }
+    }
+    
+    // Show tidy suggestion for multiple images
+    if (addedImages.length > 1) {
+      recentlyAddedImages.value = addedImages
+      showTidySuggestion.value = true
     }
   }
   input.click()
@@ -768,6 +822,31 @@ const handleSaveArtboardName = (newName: string) => {
     editingArtboard.value.name = newName.trim()
   }
   editingArtboard.value = null
+}
+
+const handleTidySuggestion = () => {
+  showTidySuggestion.value = false
+  if (recentlyAddedImages.value.length > 0) {
+    // Get the starting position from the first image
+    const minX = Math.min(...recentlyAddedImages.value.map(img => img.position.x))
+    const minY = Math.min(...recentlyAddedImages.value.map(img => img.position.y))
+    
+    // Apply tidy to recently added images
+    tidyImages(recentlyAddedImages.value, { x: minX, y: minY })
+    
+    // Select the tidied images
+    clearSelection()
+    recentlyAddedImages.value.forEach(img => {
+      selectedImageIds.value.add(img.id)
+    })
+    
+    recentlyAddedImages.value = []
+  }
+}
+
+const dismissTidySuggestion = () => {
+  showTidySuggestion.value = false
+  recentlyAddedImages.value = []
 }
 
 const handleTidyImages = () => {
