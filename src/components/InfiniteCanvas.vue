@@ -49,6 +49,22 @@
       }"
     />
     
+    <!-- Empty State -->
+    <div
+      v-if="images.length === 0 && artboards.length === 0"
+      class="absolute inset-0 flex items-center justify-center pointer-events-none"
+    >
+      <button
+        @click="handleAddImageFromEmpty"
+        class="pointer-events-auto px-6 py-3 bg-white/90 backdrop-blur border border-gray-200 rounded-xl hover:bg-white transition-colors flex items-center gap-2 shadow-sm"
+      >
+        <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        <span class="text-gray-700 font-medium">Add Image to Get Started</span>
+      </button>
+    </div>
+    
     <!-- Context Menu -->
     <ContextMenu
       v-if="showContextMenu"
@@ -555,6 +571,21 @@ const handleDeleteFromContext = () => {
   }
 }
 
+const handleAddImageFromEmpty = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.multiple = true
+  input.onchange = async (event) => {
+    const files = Array.from((event.target as HTMLInputElement).files || [])
+    const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
+    for (const file of files) {
+      await imageManager.addImage(file, centerPoint)
+    }
+  }
+  input.click()
+}
+
 
 const handleCreateArtboard = () => {
   showContextMenu.value = false
@@ -620,10 +651,6 @@ const draw = () => {
   ctx.save()
   ctx.translate(viewport.value.x, viewport.value.y)
   ctx.scale(viewport.value.zoom, viewport.value.zoom)
-  
-  // Canvas background (light gray)
-  ctx.fillStyle = '#f5f5f5'
-  ctx.fillRect(0, 0, 10000, 10000)
   
   // Draw artboards
   const sortedArtboards = [...artboards.value].sort((a, b) => a.zIndex - b.zIndex)
@@ -817,17 +844,6 @@ onMounted(() => {
   window.addEventListener('click', () => {
     showContextMenu.value = false
   })
-  
-  // Create default artboard if none exists
-  if (artboards.value.length === 0) {
-    const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
-    const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
-    createArtboard(
-      'Artboard 1',
-      { x: centerX - 400, y: centerY - 300 },
-      { width: 800, height: 600 }
-    )
-  }
   
   // 初回描画の開始
   animationFrameId.value = requestAnimationFrame(draw)
