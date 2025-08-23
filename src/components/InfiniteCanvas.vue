@@ -58,6 +58,7 @@ import { useSelection } from '../composables/useSelection'
 import { useDragResize } from '../composables/useDragResize'
 import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
+import { useImageCache } from '../composables/useImageCache'
 import type { Point, ImageItem } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -71,8 +72,10 @@ const selection = useSelection()
 const dragResize = useDragResize()
 const touch = useTouch()
 const inputMode = useInputMode()
+const imageCache = useImageCache()
 
 const isSpacePressed = ref(false)
+const animationFrameId = ref<number | null>(null)
 
 const { isPanning, viewport, screenToCanvas, startPan, updatePan, endPan, zoom, resetViewport } = canvas
 const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, selectAll, clearAllImages, addImage } = imageManager
@@ -353,10 +356,12 @@ const handleKeyUp = (e: KeyboardEvent) => {
 const handleNewProject = () => {
   clearAllImages()
   resetViewport()
+  imageCache.clearCache()
 }
 
 const handleLoadProject = (loadedImages: ImageItem[], loadedViewport: any) => {
   clearAllImages()
+  imageCache.clearCache()
   loadedImages.forEach(img => {
     images.value.push(img)
   })
@@ -386,9 +391,11 @@ const draw = () => {
   ctx.translate(viewport.value.x, viewport.value.y)
   ctx.scale(viewport.value.zoom, viewport.value.zoom)
   
+  // 背景の描画
   ctx.fillStyle = '#f0f0f0'
   ctx.fillRect(0, 0, 10000, 10000)
   
+  // グリッドの描画
   const pattern = 20
   ctx.strokeStyle = '#e0e0e0'
   ctx.lineWidth = 1
@@ -407,21 +414,23 @@ const draw = () => {
     ctx.stroke()
   }
   
+  // 画像の描画（キャッシュを使用）
   const sortedImages = [...images.value].sort((a, b) => a.zIndex - b.zIndex)
+  let needsRedraw = false
   
   for (const image of sortedImages) {
-    const img = new Image()
-    img.src = image.dataUrl
+    const cachedImg = imageCache.getImage(image.id, image.dataUrl)
     
-    if (img.complete) {
+    if (cachedImg && cachedImg.complete) {
       ctx.drawImage(
-        img,
+        cachedImg,
         image.position.x,
         image.position.y,
         image.size.width,
         image.size.height
       )
       
+      // 選択状態の描画
       if (selectedImageIds.value.has(image.id)) {
         ctx.strokeStyle = '#3b82f6'
         ctx.lineWidth = 2 / viewport.value.zoom
@@ -432,6 +441,7 @@ const draw = () => {
           image.size.height
         )
         
+        // リサイズハンドルの描画
         const handleSize = 8 / viewport.value.zoom
         ctx.fillStyle = '#3b82f6'
         
@@ -455,12 +465,26 @@ const draw = () => {
           )
         })
       }
+    } else {
+      // 画像がまだ読み込まれていない場合は再描画が必要
+      needsRedraw = true
     }
   }
   
   ctx.restore()
   
-  requestAnimationFrame(draw)
+  // 再描画のスケジューリング
+  animationFrameId.value = requestAnimationFrame(draw)
+  
+  // 画像が読み込み中の場合は少し待ってから再描画
+  if (needsRedraw) {
+    setTimeout(() => {
+      if (animationFrameId.value) {
+        cancelAnimationFrame(animationFrameId.value)
+      }
+      animationFrameId.value = requestAnimationFrame(draw)
+    }, 16)
+  }
 }
 
 const handleResize = () => {
@@ -473,14 +497,25 @@ onMounted(() => {
   window.addEventListener('paste', handlePaste)
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
-  draw()
+  
+  // 初回描画の開始
+  animationFrameId.value = requestAnimationFrame(draw)
 })
 
 onUnmounted(() => {
+  // アニメーションフレームのキャンセル
+  if (animationFrameId.value) {
+    cancelAnimationFrame(animationFrameId.value)
+  }
+  
+  // イベントリスナーの削除
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('paste', handlePaste)
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
+  
+  // 画像キャッシュのクリア
+  imageCache.clearCache()
 })
 
 watch([images, viewport, selectedImageIds], () => {
