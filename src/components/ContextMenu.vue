@@ -52,7 +52,7 @@
         </button>
         
         <button
-          v-if="hasImageSelection && imageCount > 1"
+          v-if="hasImageSelection && imageCount && imageCount > 1"
           @click="$emit('tidyImages')"
           class="w-full px-3 py-2 text-left hover:bg-gray-100 transition-colors text-sm flex items-center gap-2"
         >

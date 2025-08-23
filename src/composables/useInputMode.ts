@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 
-export type InputMode = 'mouse' | 'trackpad'
+export type InputMode = 'mouse' | 'trackpad' | 'touch'
 
 const STORAGE_KEY = 'garden-input-mode'
 
@@ -8,7 +8,7 @@ export function useInputMode() {
   // localStorageから初期値を取得
   const getInitialMode = (): InputMode => {
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored === 'mouse' || stored === 'trackpad') {
+    if (stored === 'mouse' || stored === 'trackpad' || stored === 'touch') {
       return stored
     }
     // デフォルトはトラックパッドモード（より汎用的）
@@ -24,13 +24,20 @@ export function useInputMode() {
 
   const isMouseMode = computed(() => currentMode.value === 'mouse')
   const isTrackpadMode = computed(() => currentMode.value === 'trackpad')
+  const isTouchMode = computed(() => currentMode.value === 'touch')
 
   const setMode = (mode: InputMode) => {
     currentMode.value = mode
   }
 
   const toggleMode = () => {
-    currentMode.value = currentMode.value === 'mouse' ? 'trackpad' : 'mouse'
+    if (currentMode.value === 'mouse') {
+      currentMode.value = 'trackpad'
+    } else if (currentMode.value === 'trackpad') {
+      currentMode.value = 'touch'
+    } else {
+      currentMode.value = 'mouse'
+    }
   }
 
   // モードごとの操作説明
@@ -43,13 +50,21 @@ export function useInputMode() {
         multiSelect: 'Ctrl/Cmd+クリック',
         description: 'マウス操作に最適化'
       }
-    } else {
+    } else if (mode === 'trackpad') {
       return {
         pan: '2本指スワイプ / 右クリックドラッグ / スペース+ドラッグ',
         zoom: '2本指ピンチ',
         select: 'クリック',
         multiSelect: 'Ctrl/Cmd+クリック',
-        description: 'トラックパッド・タッチ操作に最適化'
+        description: 'トラックパッド操作に最適化'
+      }
+    } else {
+      return {
+        pan: 'ドラッグ',
+        zoom: 'ピンチ',
+        select: 'タップ',
+        multiSelect: '長押し+タップ',
+        description: 'タッチ操作に最適化'
       }
     }
   }
@@ -74,7 +89,7 @@ export function useInputMode() {
         // タッチジェスチャーは無効
         enableTouchGestures: false
       }
-    } else {
+    } else if (currentMode.value === 'trackpad') {
       return {
         // トラックパッドモード: スペース+ドラッグ、右ボタン、中ボタンでパン
         enableMiddleButtonPan: true,
@@ -88,6 +103,18 @@ export function useInputMode() {
         // タッチジェスチャーを有効
         enableTouchGestures: true
       }
+    } else {
+      // タッチモード
+      return {
+        enableMiddleButtonPan: false,
+        enableRightButtonPan: false,
+        enableAltPan: false,
+        enableSpacePan: false,
+        enableTwoFingerPan: false,
+        enableWheelZoom: false,
+        enableCtrlWheelZoom: false,
+        enableTouchGestures: true
+      }
     }
   }
 
@@ -95,6 +122,7 @@ export function useInputMode() {
     currentMode: computed(() => currentMode.value),
     isMouseMode,
     isTrackpadMode,
+    isTouchMode,
     setMode,
     toggleMode,
     currentModeDescription,

@@ -12,13 +12,11 @@ describe('ImageTextEditor', () => {
       id: 'test-id',
       filename: 'test.jpg',
       dataUrl: 'data:image/jpeg;base64,test',
-      x: 100,
-      y: 100,
-      width: 200,
-      height: 150,
       position: { x: 100, y: 100 },
       size: { width: 200, height: 150 },
       originalSize: { width: 400, height: 300 },
+      rotation: 0,
+      zIndex: 1,
       title: 'Test Title',
       description: 'Test Description'
     }
@@ -239,13 +237,11 @@ describe('ImageTextEditor', () => {
       id: 'test-id',
       filename: 'test.jpg',
       dataUrl: 'data:image/jpeg;base64,test',
-      x: 100,
-      y: 100,
-      width: 200,
-      height: 150,
       position: { x: 100, y: 100 },
       size: { width: 200, height: 150 },
-      originalSize: { width: 400, height: 300 }
+      originalSize: { width: 400, height: 300 },
+      rotation: 0,
+      zIndex: 1
     }
 
     const wrapper = mount(ImageTextEditor, {

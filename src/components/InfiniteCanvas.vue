@@ -162,7 +162,7 @@ const isSpacePressed = ref(false)
 const animationFrameId = ref<number | null>(null)
 
 const { isPanning, viewport, screenToCanvas, startPan, updatePan, endPan, zoom, resetViewport } = canvas
-const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, selectAll, clearAllImages, addImage } = imageManager
+const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, clearAllImages, addImage } = imageManager
 const { isSelecting, selectionRect, startSelection, updateSelection, endSelection } = selection
 const { isDragging, isDraggingArtboard, isResizing, isResizingArtboard, startDrag, updateDrag, endDrag, updateDragArtboard, getResizeHandle, startResize, updateResize, endResize, startResizeArtboard, updateResizeArtboard, getCursor } = dragResize
 const { artboards, selectedArtboardIds, getArtboardAt, selectArtboard, clearArtboardSelection, autoResizeArtboard, createArtboard } = artboardManager
@@ -507,7 +507,7 @@ const handleDrop = async (e: DragEvent) => {
   }
 }
 
-const handlePaste = async (e: ClipboardEvent) => {
+const handlePasteEvent = async (e: ClipboardEvent) => {
   const items = Array.from(e.clipboardData?.items || [])
   const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
   const addedImages: ImageItem[] = []
@@ -530,6 +530,37 @@ const handlePaste = async (e: ClipboardEvent) => {
     recentlyAddedImages.value = addedImages
     showTidySuggestion.value = true
   }
+}
+
+// For context menu paste action
+const handlePaste = () => {
+  // Create a fake paste event or use navigator.clipboard API
+  navigator.clipboard.read?.().then(async (items) => {
+    const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
+    const addedImages: ImageItem[] = []
+    
+    let imageIndex = 0
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/')) {
+          const blob = await item.getType(type)
+          const image = await imageManager.addImage(blob as File, centerPoint, imageIndex++)
+          if (image) {
+            addedImages.push(image)
+          }
+        }
+      }
+    }
+    
+    // Show tidy suggestion for multiple pasted images
+    if (addedImages.length > 1) {
+      recentlyAddedImages.value = addedImages
+      showTidySuggestion.value = true
+    }
+  }).catch(() => {
+    // Fallback: prompt user to use Ctrl+V
+    console.log('Please use Ctrl+V or Cmd+V to paste images')
+  })
 }
 
 const handleKeyDown = (e: KeyboardEvent) => {
@@ -1187,7 +1218,7 @@ const handleResize = () => {
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
-  window.addEventListener('paste', handlePaste)
+  window.addEventListener('paste', handlePasteEvent)
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
   
@@ -1208,7 +1239,7 @@ onUnmounted(() => {
   
   // イベントリスナーの削除
   window.removeEventListener('resize', handleResize)
-  window.removeEventListener('paste', handlePaste)
+  window.removeEventListener('paste', handlePasteEvent)
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
   

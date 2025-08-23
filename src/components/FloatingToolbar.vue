@@ -158,9 +158,9 @@ const imageInput = ref<HTMLInputElement>()
 const showMenu = ref(false)
 const showSettings = ref(false)
 
-const hasSelection = computed(() => 
-  props.selectedImageIds.size > 0 || props.selectedArtboardIds.size > 0
-)
+// const hasSelection = computed(() => 
+//   props.selectedImageIds.size > 0 || props.selectedArtboardIds.size > 0
+// )
 
 const zoomPercentage = computed(() => 
   Math.round(props.viewport.zoom * 100)

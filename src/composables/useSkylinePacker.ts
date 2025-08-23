@@ -3,6 +3,8 @@ import type { ImageItem, Point } from '../types'
 export function useSkylinePacker() {
   
   // Square Grid Packing Algorithm - arranges items in a square-like grid
+  // Kept for reference - not used anymore
+  /*
   const tidyImages = (images: ImageItem[], startPosition?: Point): void => {
     if (images.length === 0) return
     
@@ -23,7 +25,7 @@ export function useSkylinePacker() {
     // Calculate grid dimensions based on number of images
     const n = images.length
     const cols = Math.ceil(Math.sqrt(n * 1.5)) // Slightly more columns than rows for better aspect ratio
-    const rows = Math.ceil(n / cols)
+    // const rows = Math.ceil(n / cols)
     
     // Sort images by area (largest first) for better packing
     const sortedImages = [...images].sort((a, b) => {
@@ -42,7 +44,7 @@ export function useSkylinePacker() {
     
     // Calculate average dimensions for better layout
     const avgWidth = images.reduce((sum, img) => sum + img.size.width, 0) / images.length
-    const avgHeight = images.reduce((sum, img) => sum + img.size.height, 0) / images.length
+    // const avgHeight = images.reduce((sum, img) => sum + img.size.height, 0) / images.length
     
     // Target row width based on square layout
     const targetRowWidth = Math.max(
@@ -69,8 +71,6 @@ export function useSkylinePacker() {
       
       // Place the image
       image.position = { x: currentX, y: currentY }
-      image.x = currentX
-      image.y = currentY
       
       // Update position for next image
       currentX += image.size.width + spacing
@@ -79,6 +79,7 @@ export function useSkylinePacker() {
       itemsInRow++
     }
   }
+  */
   
   // Compact Bin Packing - much tighter packing algorithm
   const tidyImagesCompact = (images: ImageItem[], startPosition?: Point): void => {
@@ -96,10 +97,10 @@ export function useSkylinePacker() {
     })
     
     // Calculate optimal container width based on total area
-    const totalArea = sortedImages.reduce((sum, img) => 
-      sum + (img.size.width + spacing) * (img.size.height + spacing), 0
-    )
-    const containerWidth = Math.sqrt(totalArea) * 1.1 // Slightly wider than square
+    // const totalArea = sortedImages.reduce((sum, img) => 
+    //   sum + (img.size.width + spacing) * (img.size.height + spacing), 0
+    // )
+    // const containerWidth = Math.sqrt(totalArea) * 1.1 // Slightly wider than square
     
     // Track occupied spaces for tighter packing
     interface Space {
@@ -172,8 +173,6 @@ export function useSkylinePacker() {
       const position = findBestPosition(image.size.width, image.size.height)
       
       image.position = position
-      image.x = position.x
-      image.y = position.y
       
       // Mark space as occupied
       occupiedSpaces.push({
@@ -195,8 +194,6 @@ export function useSkylinePacker() {
         for (const image of images) {
           image.position.x += offsetX
           image.position.y += offsetY
-          image.x = image.position.x
-          image.y = image.position.y
         }
       }
     }

@@ -105,9 +105,9 @@
 import { ref } from 'vue'
 import { useInputMode } from '../composables/useInputMode'
 
-const emit = defineEmits<{
-  complete: []
-}>()
+// const emit = defineEmits<{
+//   complete: []
+// }>()
 
 const inputModeManager = useInputMode()
 const selectedMode = ref<'mouse' | 'trackpad' | 'touch' | null>(null)

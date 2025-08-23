@@ -7,11 +7,11 @@ describe('useSkylinePacker', () => {
     id,
     filename: `image-${id}.jpg`,
     dataUrl: 'data:image/jpeg;base64,test',
-    x,
-    y,
     position: { x, y },
     size: { width, height },
-    originalSize: { width: width * 2, height: height * 2 }
+    originalSize: { width: width * 2, height: height * 2 },
+    rotation: 0,
+    zIndex: 1
   })
 
   describe('tidyImages', () => {
@@ -143,10 +143,10 @@ describe('useSkylinePacker', () => {
       
       tidyImages(images)
       
-      // Check that both position object and x,y properties are updated
+      // Check that position properties are updated
       images.forEach(img => {
-        expect(img.x).toBe(img.position.x)
-        expect(img.y).toBe(img.position.y)
+        expect(img.position.x).toBeDefined()
+        expect(img.position.y).toBeDefined()
       })
     })
 
