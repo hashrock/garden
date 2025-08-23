@@ -139,7 +139,7 @@
 import { computed } from 'vue'
 import { useProjectIO } from '../composables/useProjectIO'
 import { useInputMode } from '../composables/useInputMode'
-import type { ImageItem, Artboard } from '../types'
+import type { ImageItem, Artboard, Viewport } from '../types'
 
 const props = defineProps<{
   images: ImageItem[]
@@ -152,7 +152,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   newProject: []
-  loadProject: [images: ImageItem[], viewport: any]
+  loadProject: [images: ImageItem[], viewport: Viewport]
   addImage: [file: File, position: { x: number; y: number }]
   removeSelected: []
   selectAll: []

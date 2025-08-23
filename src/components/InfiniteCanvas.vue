@@ -64,7 +64,7 @@ import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
 import { useArtboardManager } from '../composables/useArtboardManager'
-import type { Point, ImageItem, ResizeHandle } from '../types'
+import type { Point, ImageItem, ResizeHandle, Viewport } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const headerHeight = 48
@@ -479,7 +479,7 @@ const handleNewProject = () => {
   imageCache.clearCache()
 }
 
-const handleLoadProject = (loadedImages: ImageItem[], loadedViewport: any) => {
+const handleLoadProject = (loadedImages: ImageItem[], loadedViewport: Viewport) => {
   clearAllImages()
   imageCache.clearCache()
   loadedImages.forEach(img => {

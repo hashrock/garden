@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, VueWrapper } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import InfiniteCanvas from '../InfiniteCanvas.vue'
+import type { ComponentPublicInstance } from 'vue'
 
 describe('InfiniteCanvas', () => {
-  let wrapper: any
+  let wrapper: VueWrapper<ComponentPublicInstance>
   
   beforeEach(() => {
     // window オブジェクトのモック
@@ -21,7 +22,7 @@ describe('InfiniteCanvas', () => {
     })
     
     // getContext のモック
-    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+    ;(HTMLCanvasElement.prototype.getContext as unknown) = vi.fn(() => ({
       clearRect: vi.fn(),
       save: vi.fn(),
       restore: vi.fn(),
@@ -37,7 +38,7 @@ describe('InfiniteCanvas', () => {
       fillStyle: '',
       strokeStyle: '',
       lineWidth: 1
-    })) as any
+    }))
     
     const pinia = createPinia()
     

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useImageManager } from '../useImageManager'
+import type { ImageItem } from '../../types'
 
 // Image のモック
-global.Image = class {
+class MockImage {
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
   src = ''
@@ -14,7 +15,9 @@ global.Image = class {
       if (this.onload) this.onload()
     }, 0)
   }
-} as any
+}
+
+global.Image = MockImage as unknown as typeof Image
 
 describe('useImageManager', () => {
   let imageManager: ReturnType<typeof useImageManager>
@@ -112,7 +115,7 @@ describe('useImageManager', () => {
   })
   
   describe('画像の位置とサイズ', () => {
-    let image: any
+    let image: ImageItem | null
     
     beforeEach(async () => {
       const dataUrl = 'data:image/png;base64,test'
@@ -120,6 +123,7 @@ describe('useImageManager', () => {
     })
     
     it('画像の位置を更新できる', () => {
+      if (!image) return
       imageManager.updateImagePosition(image.id, { x: 50, y: 60 })
       
       const updatedImage = imageManager.images.value[0]
@@ -127,6 +131,7 @@ describe('useImageManager', () => {
     })
     
     it('画像のサイズを更新できる', () => {
+      if (!image) return
       imageManager.updateImageSize(image.id, { width: 200, height: 150 })
       
       const updatedImage = imageManager.images.value[0]

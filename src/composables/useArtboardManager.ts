@@ -7,7 +7,7 @@ export function useArtboardManager() {
 
   const createArtboard = (name: string, position: Point, size: Size): Artboard => {
     const artboard: Artboard = {
-      id: `artboard-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `artboard-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
       name,
       position,
       size,

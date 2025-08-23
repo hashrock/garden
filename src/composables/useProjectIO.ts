@@ -1,5 +1,5 @@
 import { TarBuilder, TarExtractor } from '../utils/tar'
-import type { ImageItem, ProjectData } from '../types'
+import type { ImageItem, ProjectData, Viewport } from '../types'
 
 export function useProjectIO() {
   const compressData = async (data: Uint8Array): Promise<Uint8Array> => {
@@ -93,7 +93,7 @@ export function useProjectIO() {
     return mimeTypes[ext || ''] || 'application/octet-stream'
   }
 
-  const saveProject = async (images: ImageItem[], viewport: any, canvasSize: any): Promise<Blob> => {
+  const saveProject = async (images: ImageItem[], viewport: Viewport, canvasSize: { width: number; height: number }): Promise<Blob> => {
     const projectData: ProjectData = {
       version: '1.0.0',
       metadata: {
@@ -166,7 +166,7 @@ export function useProjectIO() {
     }
   }
 
-  const downloadProject = async (images: ImageItem[], viewport: any, canvasSize: any) => {
+  const downloadProject = async (images: ImageItem[], viewport: Viewport, canvasSize: { width: number; height: number }) => {
     const blob = await saveProject(images, viewport, canvasSize)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
