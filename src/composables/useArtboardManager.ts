@@ -185,12 +185,34 @@ export function useArtboardManager() {
     const maxX = Math.max(...childImages.map(img => img.position.x + img.size.width))
     const maxY = Math.max(...childImages.map(img => img.position.y + img.size.height))
 
-    const padding = 40
-    artboard.position = { x: minX - padding, y: minY - padding }
-    artboard.size = { width: maxX - minX + padding * 2, height: maxY - minY + padding * 2 }
+    // Larger padding for better spacing
+    const padding = 80
+    const newX = minX - padding
+    const newY = minY - padding
+    const newWidth = maxX - minX + padding * 2
+    const newHeight = maxY - minY + padding * 2
+    
+    // Only expand, never shrink
+    const currentRight = artboard.position.x + artboard.size.width
+    const currentBottom = artboard.position.y + artboard.size.height
+    const newRight = newX + newWidth
+    const newBottom = newY + newHeight
+    
+    // Calculate the expanded bounds with extra margin
+    const extraMargin = 20
+    const finalX = Math.min(artboard.position.x, newX - extraMargin)
+    const finalY = Math.min(artboard.position.y, newY - extraMargin)
+    const finalRight = Math.max(currentRight, newRight + extraMargin)
+    const finalBottom = Math.max(currentBottom, newBottom + extraMargin)
+    
+    artboard.position = { x: finalX, y: finalY }
+    artboard.size = { 
+      width: finalRight - finalX, 
+      height: finalBottom - finalY 
+    }
   }
 
-  const getResizeHandle = (artboard: Artboard, point: Point, handleSize: number = 10): string | null => {
+  const getResizeHandle = (artboard: Artboard, point: Point, handleSize: number = 20): string | null => {
     const { position, size } = artboard
     const threshold = handleSize
     
