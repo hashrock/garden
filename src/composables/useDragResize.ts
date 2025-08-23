@@ -103,26 +103,31 @@ export function useDragResize() {
     })
   }
 
-  const getResizeHandle = (image: ImageItem, point: Point, handleSize: number = 10): ResizeHandle | null => {
+  const getResizeHandle = (image: ImageItem, point: Point, handleSize: number = 20): ResizeHandle | null => {
     const { position, size } = image
     const threshold = handleSize
+    const outerThreshold = handleSize / 2  // Allow clicking outside the image bounds
     
     const relX = point.x - position.x
     const relY = point.y - position.y
     
-    const isLeft = relX < threshold
-    const isRight = relX > size.width - threshold
-    const isTop = relY < threshold
-    const isBottom = relY > size.height - threshold
+    // Check if point is near edges (including outside the image)
+    const isNearLeft = relX >= -outerThreshold && relX < threshold
+    const isNearRight = relX > size.width - threshold && relX <= size.width + outerThreshold
+    const isNearTop = relY >= -outerThreshold && relY < threshold
+    const isNearBottom = relY > size.height - threshold && relY <= size.height + outerThreshold
     
-    if (isTop && isLeft) return 'nw'
-    if (isTop && isRight) return 'ne'
-    if (isBottom && isLeft) return 'sw'
-    if (isBottom && isRight) return 'se'
-    if (isTop) return 'n'
-    if (isBottom) return 's'
-    if (isLeft) return 'w'
-    if (isRight) return 'e'
+    // Corner handles (prioritized)
+    if (isNearTop && isNearLeft) return 'nw'
+    if (isNearTop && isNearRight) return 'ne'
+    if (isNearBottom && isNearLeft) return 'sw'
+    if (isNearBottom && isNearRight) return 'se'
+    
+    // Edge handles
+    if (isNearTop && relX >= 0 && relX <= size.width) return 'n'
+    if (isNearBottom && relX >= 0 && relX <= size.width) return 's'
+    if (isNearLeft && relY >= 0 && relY <= size.height) return 'w'
+    if (isNearRight && relY >= 0 && relY <= size.height) return 'e'
     
     return null
   }

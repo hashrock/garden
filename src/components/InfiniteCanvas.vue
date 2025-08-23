@@ -55,6 +55,7 @@
       :x="contextMenuPosition.x"
       :y="contextMenuPosition.y"
       :hasSelection="selectedImageIds.size > 0 || selectedArtboardIds.size > 0"
+      :hasImageSelection="selectedImageIds.size > 0"
       @close="showContextMenu = false"
       @addImage="handleAddImageFromContext"
       @paste="handlePaste"
@@ -170,7 +171,7 @@ const handlePointerDown = (e: PointerEvent) => {
         dragResize.startDragArtboard(clickedArtboard, canvasPoint, selectedArtboards)
       }
     } else if (clickedImage) {
-      const handle = getResizeHandle(clickedImage, canvasPoint)
+      const handle = getResizeHandle(clickedImage, canvasPoint, 25)
       
       if (handle && selectedImageIds.value.has(clickedImage.id)) {
         startResize(clickedImage, handle, canvasPoint)
@@ -273,7 +274,7 @@ const handlePointerMove = (e: PointerEvent) => {
     // Check for image resize handle hover
     const hoveredImage = getImageAt(canvasPoint)
     if (hoveredImage && selectedImageIds.value.has(hoveredImage.id)) {
-      const handle = getResizeHandle(hoveredImage, canvasPoint)
+      const handle = getResizeHandle(hoveredImage, canvasPoint, 25)
       if (canvasRef.value) {
         canvasRef.value.style.cursor = handle ? getCursor(handle) : 'move'
       }
@@ -556,16 +557,49 @@ const handleDeleteFromContext = () => {
 
 
 const handleCreateArtboard = () => {
-  const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
-  const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
-  const artboard = createArtboard(
-    `Artboard ${artboards.value.length + 1}`,
-    { x: centerX - 400, y: centerY - 300 },
-    { width: 800, height: 600 }
-  )
-  clearSelection()
-  clearArtboardSelection()
-  selectArtboard(artboard.id)
+  showContextMenu.value = false
+  
+  // If images are selected, create artboard around them
+  if (selectedImageIds.value.size > 0) {
+    const selectedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
+    
+    if (selectedImages.length > 0) {
+      // Calculate bounding box of selected images
+      const minX = Math.min(...selectedImages.map(img => img.position.x))
+      const minY = Math.min(...selectedImages.map(img => img.position.y))
+      const maxX = Math.max(...selectedImages.map(img => img.position.x + img.size.width))
+      const maxY = Math.max(...selectedImages.map(img => img.position.y + img.size.height))
+      
+      const padding = 40
+      const artboard = createArtboard(
+        `Artboard ${artboards.value.length + 1}`,
+        { x: minX - padding, y: minY - padding },
+        { width: maxX - minX + padding * 2, height: maxY - minY + padding * 2 }
+      )
+      
+      // Assign images to the new artboard
+      selectedImages.forEach(img => {
+        img.artboardId = artboard.id
+      })
+      artboardManager.addToArtboard(artboard.id, selectedImages.map(img => img.id))
+      
+      clearSelection()
+      clearArtboardSelection()
+      selectArtboard(artboard.id)
+    }
+  } else {
+    // Default behavior: create empty artboard at center
+    const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
+    const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
+    const artboard = createArtboard(
+      `Artboard ${artboards.value.length + 1}`,
+      { x: centerX - 400, y: centerY - 300 },
+      { width: 800, height: 600 }
+    )
+    clearSelection()
+    clearArtboardSelection()
+    selectArtboard(artboard.id)
+  }
 }
 
 const handleDeleteArtboard = () => {
