@@ -19,7 +19,8 @@
       ref="canvasRef"
       :width="canvasWidth"
       :height="canvasHeight"
-      class="absolute inset-0 cursor-grab mt-12"
+      class="absolute left-0 right-0 bottom-0 cursor-grab"
+      :style="{ top: '48px' }"
       :class="{
         'cursor-grabbing': isPanning,
         'cursor-crosshair': isSelecting
@@ -37,7 +38,7 @@
       class="absolute border-2 border-blue-500 bg-blue-500 bg-opacity-10 pointer-events-none"
       :style="{
         left: `${selectionRect.x}px`,
-        top: `${selectionRect.y}px`,
+        top: `${selectionRect.y + headerHeight}px`,
         width: `${selectionRect.width}px`,
         height: `${selectionRect.height}px`
       }"
@@ -55,8 +56,9 @@ import { useDragResize } from '../composables/useDragResize'
 import type { Point, ImageItem } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const headerHeight = 48
 const canvasWidth = ref(window.innerWidth)
-const canvasHeight = ref(window.innerHeight)
+const canvasHeight = ref(window.innerHeight - headerHeight)
 
 const canvas = useCanvas(canvasRef)
 const imageManager = useImageManager()
@@ -318,7 +320,7 @@ const draw = () => {
 
 const handleResize = () => {
   canvasWidth.value = window.innerWidth
-  canvasHeight.value = window.innerHeight
+  canvasHeight.value = window.innerHeight - headerHeight
 }
 
 onMounted(() => {
