@@ -14,6 +14,19 @@ export interface Viewport {
   zoom: number
 }
 
+export interface Artboard {
+  id: string
+  name: string
+  position: Point
+  size: Size
+  children: string[]
+  zIndex: number
+  selected?: boolean
+  backgroundColor?: string
+  borderColor?: string
+  isDropTarget?: boolean
+}
+
 export interface ImageItem {
   id: string
   filename: string
@@ -24,6 +37,7 @@ export interface ImageItem {
   rotation: number
   zIndex: number
   selected?: boolean
+  artboardId?: string
 }
 
 export interface ProjectMetadata {

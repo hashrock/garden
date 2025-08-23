@@ -2,7 +2,9 @@
   <div class="relative w-full h-full overflow-hidden bg-gray-100">
     <Toolbar
       :images="images"
+      :artboards="artboards"
       :selectedImageIds="selectedImageIds"
+      :selectedArtboardIds="selectedArtboardIds"
       :viewport="viewport"
       :canvasSize="{ width: 10000, height: 10000 }"
       @newProject="handleNewProject"
@@ -13,6 +15,8 @@
       @clearSelection="clearSelection"
       @zoom="handleZoomFromToolbar"
       @resetViewport="resetViewport"
+      @createArtboard="handleCreateArtboard"
+      @deleteArtboard="handleDeleteArtboard"
     />
     
     <canvas
@@ -59,7 +63,8 @@ import { useDragResize } from '../composables/useDragResize'
 import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
-import type { Point, ImageItem } from '../types'
+import { useArtboardManager } from '../composables/useArtboardManager'
+import type { Point, ImageItem, Artboard } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const headerHeight = 48
@@ -73,6 +78,7 @@ const dragResize = useDragResize()
 const touch = useTouch()
 const inputMode = useInputMode()
 const imageCache = useImageCache()
+const artboardManager = useArtboardManager()
 
 const isSpacePressed = ref(false)
 const animationFrameId = ref<number | null>(null)
@@ -80,7 +86,8 @@ const animationFrameId = ref<number | null>(null)
 const { isPanning, viewport, screenToCanvas, startPan, updatePan, endPan, zoom, resetViewport } = canvas
 const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, selectAll, clearAllImages, addImage } = imageManager
 const { isSelecting, selectionRect, startSelection, updateSelection, endSelection } = selection
-const { isDragging, isResizing, startDrag, updateDrag, endDrag, getResizeHandle, startResize, updateResize, endResize, getCursor } = dragResize
+const { isDragging, isDraggingArtboard, isResizing, isResizingArtboard, startDrag, updateDrag, endDrag, startDragArtboard, updateDragArtboard, getResizeHandle, startResize, updateResize, endResize, startResizeArtboard, updateResizeArtboard, getCursor } = dragResize
+const { artboards, selectedArtboardIds, getArtboardAt, getArtboardNameAt, selectArtboard, clearArtboardSelection, createArtboardFromSelection, removeItemsFromArtboard, moveArtboardChildren, autoResizeArtboard, createArtboard } = artboardManager
 
 const handlePointerDown = (e: PointerEvent) => {
   if (!canvasRef.value) return
@@ -119,9 +126,36 @@ const handlePointerDown = (e: PointerEvent) => {
   }
   
   if (e.button === 0 && e.pointerType !== 'touch') {
+    const clickedArtboard = getArtboardAt(canvasPoint)
     const clickedImage = getImageAt(canvasPoint)
     
-    if (clickedImage) {
+    // Check for artboard resize handle (with larger hit area)
+    if (clickedArtboard && selectedArtboardIds.value.has(clickedArtboard.id)) {
+      const handle = artboardManager.getResizeHandle(clickedArtboard, canvasPoint, 20)
+      if (handle) {
+        startResizeArtboard(clickedArtboard, handle, canvasPoint)
+        return
+      }
+    }
+    
+    if (clickedArtboard && !clickedImage) {
+      if (e.ctrlKey || e.metaKey) {
+        if (selectedArtboardIds.value.has(clickedArtboard.id)) {
+          artboardManager.deselectArtboard(clickedArtboard.id)
+        } else {
+          selectArtboard(clickedArtboard.id, true)
+        }
+      } else {
+        clearSelection()
+        clearArtboardSelection()
+        selectArtboard(clickedArtboard.id)
+      }
+      
+      const selectedArtboards = artboards.value.filter(a => selectedArtboardIds.value.has(a.id))
+      if (selectedArtboards.length > 0) {
+        dragResize.startDragArtboard(clickedArtboard, canvasPoint, selectedArtboards)
+      }
+    } else if (clickedImage) {
       const handle = getResizeHandle(clickedImage, canvasPoint)
       
       if (handle && selectedImageIds.value.has(clickedImage.id)) {
@@ -139,6 +173,7 @@ const handlePointerDown = (e: PointerEvent) => {
     } else {
       if (!e.ctrlKey && !e.metaKey) {
         clearSelection()
+        clearArtboardSelection()
       }
       startSelection(screenPoint)
     }
@@ -189,13 +224,39 @@ const handlePointerMove = (e: PointerEvent) => {
   
   if (isPanning.value) {
     updatePan(e.clientX, e.clientY)
+  } else if (isDraggingArtboard.value) {
+    updateDragArtboard(canvasPoint, images.value)
   } else if (isDragging.value) {
     updateDrag(canvasPoint)
+    
+    // Visual feedback: highlight target artboard
+    const targetArtboard = getArtboardAt(canvasPoint)
+    artboards.value.forEach(artboard => {
+      // Reset all artboards' drop target state
+      artboard.isDropTarget = false
+    })
+    if (targetArtboard) {
+      // Mark as drop target
+      targetArtboard.isDropTarget = true
+    }
+  } else if (isResizingArtboard.value) {
+    updateResizeArtboard(canvasPoint, e.shiftKey)
   } else if (isResizing.value) {
     updateResize(canvasPoint, e.shiftKey)
   } else if (isSelecting.value) {
     updateSelection(screenPoint)
   } else if (e.pointerType !== 'touch') {
+    // Check for artboard resize handle hover
+    const hoveredArtboard = getArtboardAt(canvasPoint)
+    if (hoveredArtboard && selectedArtboardIds.value.has(hoveredArtboard.id)) {
+      const artboardHandle = artboardManager.getResizeHandle(hoveredArtboard, canvasPoint, 20)
+      if (artboardHandle && canvasRef.value) {
+        canvasRef.value.style.cursor = getCursor(artboardHandle)
+        return
+      }
+    }
+    
+    // Check for image resize handle hover
     const hoveredImage = getImageAt(canvasPoint)
     if (hoveredImage && selectedImageIds.value.has(hoveredImage.id)) {
       const handle = getResizeHandle(hoveredImage, canvasPoint)
@@ -222,8 +283,48 @@ const handlePointerUp = (e: PointerEvent) => {
   
   if (isPanning.value) {
     endPan()
-  } else if (isDragging.value) {
+  } else if (isDraggingArtboard.value) {
     endDrag()
+  } else if (isDragging.value) {
+    // Check if image was dropped on an artboard
+    const rect = canvasRef.value.getBoundingClientRect()
+    const screenPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    const canvasPoint = screenToCanvas(screenPoint.x, screenPoint.y)
+    
+    // Find which artboard the image is over
+    const targetArtboard = getArtboardAt(canvasPoint)
+    
+    // Update image artboard assignment
+    const draggedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
+    draggedImages.forEach(img => {
+      // Remove from previous artboard
+      if (img.artboardId) {
+        const prevArtboard = artboards.value.find(a => a.id === img.artboardId)
+        if (prevArtboard) {
+          artboardManager.removeFromArtboard(prevArtboard.id, [img.id])
+        }
+      }
+      
+      // Add to new artboard
+      if (targetArtboard) {
+        img.artboardId = targetArtboard.id
+        artboardManager.addToArtboard(targetArtboard.id, [img.id])
+        // Auto-resize the artboard to fit the new image
+        autoResizeArtboard(targetArtboard.id, images.value)
+      } else {
+        // Remove from artboard if dropped outside
+        delete img.artboardId
+      }
+    })
+    
+    // Clear drop target state
+    artboards.value.forEach(artboard => {
+      artboard.isDropTarget = false
+    })
+    
+    endDrag()
+  } else if (isResizingArtboard.value) {
+    endResize()
   } else if (isResizing.value) {
     endResize()
   } else if (isSelecting.value && selectionRect.value) {
@@ -257,6 +358,12 @@ const handlePointerCancel = (e: PointerEvent) => {
   
   if (touch.pointerCount.value === 0) {
     touch.clearPointers()
+    
+    // Clear drop target state
+    artboards.value.forEach(artboard => {
+      artboard.isDropTarget = false
+    })
+    
     endPan()
     endDrag()
     endResize()
@@ -338,6 +445,19 @@ const handleKeyDown = (e: KeyboardEvent) => {
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
     e.preventDefault()
     imageManager.selectAll()
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    e.preventDefault()
+    // Create new artboard at center of viewport
+    const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
+    const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
+    const artboard = createArtboard(
+      `Artboard ${artboards.value.length + 1}`,
+      { x: centerX - 400, y: centerY - 300 },
+      { width: 800, height: 600 }
+    )
+    clearSelection()
+    clearArtboardSelection()
+    selectArtboard(artboard.id)
   } else if (e.key === 'Escape') {
     clearSelection()
     endSelection()
@@ -379,6 +499,26 @@ const handleZoomFromToolbar = (delta: number, centerX: number, centerY: number) 
   zoom(delta, centerX, centerY)
 }
 
+const handleCreateArtboard = () => {
+  const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
+  const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
+  const artboard = createArtboard(
+    `Artboard ${artboards.value.length + 1}`,
+    { x: centerX - 400, y: centerY - 300 },
+    { width: 800, height: 600 }
+  )
+  clearSelection()
+  clearArtboardSelection()
+  selectArtboard(artboard.id)
+}
+
+const handleDeleteArtboard = () => {
+  selectedArtboardIds.value.forEach(artboardId => {
+    removeItemsFromArtboard(artboardId, images.value)
+  })
+  clearArtboardSelection()
+}
+
 const draw = () => {
   if (!canvasRef.value) return
   
@@ -391,27 +531,112 @@ const draw = () => {
   ctx.translate(viewport.value.x, viewport.value.y)
   ctx.scale(viewport.value.zoom, viewport.value.zoom)
   
-  // 背景の描画
-  ctx.fillStyle = '#f0f0f0'
+  // Canvas background (light gray)
+  ctx.fillStyle = '#f5f5f5'
   ctx.fillRect(0, 0, 10000, 10000)
   
-  // グリッドの描画
-  const pattern = 20
-  ctx.strokeStyle = '#e0e0e0'
-  ctx.lineWidth = 1
-  
-  for (let x = 0; x <= 10000; x += pattern) {
+  // Draw artboards
+  const sortedArtboards = [...artboards.value].sort((a, b) => a.zIndex - b.zIndex)
+  for (const artboard of sortedArtboards) {
+    // Artboard background
+    ctx.fillStyle = artboard.backgroundColor || '#ffffff'
+    ctx.fillRect(
+      artboard.position.x,
+      artboard.position.y,
+      artboard.size.width,
+      artboard.size.height
+    )
+    
+    // Artboard grid
+    const gridSize = 20
+    ctx.strokeStyle = '#f0f0f0'
+    ctx.lineWidth = 0.5 / viewport.value.zoom
+    
+    // Clip to artboard bounds
+    ctx.save()
     ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, 10000)
-    ctx.stroke()
-  }
-  
-  for (let y = 0; y <= 10000; y += pattern) {
-    ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(10000, y)
-    ctx.stroke()
+    ctx.rect(
+      artboard.position.x,
+      artboard.position.y,
+      artboard.size.width,
+      artboard.size.height
+    )
+    ctx.clip()
+    
+    // Draw grid lines
+    for (let x = artboard.position.x; x <= artboard.position.x + artboard.size.width; x += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(x, artboard.position.y)
+      ctx.lineTo(x, artboard.position.y + artboard.size.height)
+      ctx.stroke()
+    }
+    
+    for (let y = artboard.position.y; y <= artboard.position.y + artboard.size.height; y += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(artboard.position.x, y)
+      ctx.lineTo(artboard.position.x + artboard.size.width, y)
+      ctx.stroke()
+    }
+    
+    ctx.restore()
+    
+    // Artboard border
+    ctx.strokeStyle = artboard.isDropTarget ? '#3b82f6' : (artboard.borderColor || '#e0e0e0')
+    ctx.lineWidth = artboard.isDropTarget ? 2 / viewport.value.zoom : 1 / viewport.value.zoom
+    ctx.strokeRect(
+      artboard.position.x,
+      artboard.position.y,
+      artboard.size.width,
+      artboard.size.height
+    )
+    
+    // Artboard name (inside the artboard, top-left corner)
+    ctx.fillStyle = '#666'
+    ctx.font = `${12 / viewport.value.zoom}px sans-serif`
+    ctx.textBaseline = 'top'
+    ctx.fillText(
+      artboard.name,
+      artboard.position.x + 10 / viewport.value.zoom,
+      artboard.position.y + 10 / viewport.value.zoom
+    )
+    
+    // Selection state
+    if (selectedArtboardIds.value.has(artboard.id)) {
+      ctx.strokeStyle = '#3b82f6'
+      ctx.lineWidth = 2 / viewport.value.zoom
+      ctx.strokeRect(
+        artboard.position.x,
+        artboard.position.y,
+        artboard.size.width,
+        artboard.size.height
+      )
+      
+      // Draw resize handles
+      if (selectedArtboardIds.value.size === 1) {
+        const handleSize = 8 / viewport.value.zoom
+        ctx.fillStyle = '#3b82f6'
+        
+        const handles = [
+          { x: artboard.position.x, y: artboard.position.y },
+          { x: artboard.position.x + artboard.size.width / 2, y: artboard.position.y },
+          { x: artboard.position.x + artboard.size.width, y: artboard.position.y },
+          { x: artboard.position.x + artboard.size.width, y: artboard.position.y + artboard.size.height / 2 },
+          { x: artboard.position.x + artboard.size.width, y: artboard.position.y + artboard.size.height },
+          { x: artboard.position.x + artboard.size.width / 2, y: artboard.position.y + artboard.size.height },
+          { x: artboard.position.x, y: artboard.position.y + artboard.size.height },
+          { x: artboard.position.x, y: artboard.position.y + artboard.size.height / 2 }
+        ]
+        
+        handles.forEach(handle => {
+          ctx.fillRect(
+            handle.x - handleSize / 2,
+            handle.y - handleSize / 2,
+            handleSize,
+            handleSize
+          )
+        })
+      }
+    }
   }
   
   // 画像の描画（キャッシュを使用）
@@ -497,6 +722,17 @@ onMounted(() => {
   window.addEventListener('paste', handlePaste)
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
+  
+  // Create default artboard if none exists
+  if (artboards.value.length === 0) {
+    const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
+    const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
+    createArtboard(
+      'Artboard 1',
+      { x: centerX - 400, y: centerY - 300 },
+      { width: 800, height: 600 }
+    )
+  }
   
   // 初回描画の開始
   animationFrameId.value = requestAnimationFrame(draw)
