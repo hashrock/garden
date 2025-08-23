@@ -1,6 +1,6 @@
 <template>
   <div class="relative w-full h-full overflow-hidden bg-gray-100">
-    <Toolbar
+    <FloatingToolbar
       :images="images"
       :artboards="artboards"
       :selectedImageIds="selectedImageIds"
@@ -11,7 +11,6 @@
       @loadProject="handleLoadProject"
       @addImage="handleAddImageFromToolbar"
       @removeSelected="removeSelectedImages"
-      @selectAll="selectAll"
       @clearSelection="clearSelection"
       @zoom="handleZoomFromToolbar"
       @resetViewport="resetViewport"
@@ -23,8 +22,7 @@
       ref="canvasRef"
       :width="canvasWidth"
       :height="canvasHeight"
-      class="absolute left-0 right-0 bottom-0 cursor-grab"
-      :style="{ top: '48px' }"
+      class="absolute inset-0 cursor-grab"
       :class="{
         'cursor-grabbing': isPanning,
         'cursor-crosshair': isSelecting
@@ -34,7 +32,7 @@
       @pointerup="handlePointerUp"
       @pointercancel="handlePointerCancel"
       @wheel="handleWheel"
-      @contextmenu.prevent
+      @contextmenu="handleContextMenu"
       @dragover.prevent
       @drop="handleDrop"
       style="touch-action: none"
@@ -45,17 +43,31 @@
       class="absolute border-2 border-blue-500 bg-blue-500 bg-opacity-10 pointer-events-none"
       :style="{
         left: `${selectionRect.x}px`,
-        top: `${selectionRect.y + headerHeight}px`,
+        top: `${selectionRect.y}px`,
         width: `${selectionRect.width}px`,
         height: `${selectionRect.height}px`
       }"
+    />
+    
+    <!-- Context Menu -->
+    <ContextMenu
+      v-if="showContextMenu"
+      :x="contextMenuPosition.x"
+      :y="contextMenuPosition.y"
+      :hasSelection="selectedImageIds.size > 0 || selectedArtboardIds.size > 0"
+      @close="showContextMenu = false"
+      @addImage="handleAddImageFromContext"
+      @paste="handlePaste"
+      @delete="handleDeleteFromContext"
+      @createArtboard="handleCreateArtboard"
     />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
-import Toolbar from './Toolbar.vue'
+import FloatingToolbar from './FloatingToolbar.vue'
+import ContextMenu from './ContextMenu.vue'
 import { useCanvas } from '../composables/useCanvas'
 import { useImageManager } from '../composables/useImageManager'
 import { useSelection } from '../composables/useSelection'
@@ -67,9 +79,11 @@ import { useArtboardManager } from '../composables/useArtboardManager'
 import type { Point, ImageItem, ResizeHandle, Viewport } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
-const headerHeight = 48
 const canvasWidth = ref(window.innerWidth)
-const canvasHeight = ref(window.innerHeight - headerHeight)
+const canvasHeight = ref(window.innerHeight)
+
+const showContextMenu = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
 
 const canvas = useCanvas(canvasRef)
 const imageManager = useImageManager()
@@ -441,7 +455,14 @@ const handleKeyDown = (e: KeyboardEvent) => {
       canvasRef.value.style.cursor = 'grab'
     }
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
-    removeSelectedImages()
+    // Delete selected images
+    if (selectedImageIds.value.size > 0) {
+      removeSelectedImages()
+    }
+    // Delete selected artboards
+    if (selectedArtboardIds.value.size > 0) {
+      handleDeleteArtboard()
+    }
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
     e.preventDefault()
     imageManager.selectAll()
@@ -500,6 +521,39 @@ const handleAddImageFromToolbar = async (file: File, position: Point) => {
 const handleZoomFromToolbar = (delta: number, centerX: number, centerY: number) => {
   zoom(delta, centerX, centerY)
 }
+
+const handleContextMenu = (e: MouseEvent) => {
+  e.preventDefault()
+  showContextMenu.value = true
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY }
+}
+
+const handleAddImageFromContext = () => {
+  showContextMenu.value = false
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.multiple = true
+  input.onchange = async (event) => {
+    const files = Array.from((event.target as HTMLInputElement).files || [])
+    const centerPoint = screenToCanvas(canvasWidth.value / 2, canvasHeight.value / 2)
+    for (const file of files) {
+      await imageManager.addImage(file, centerPoint)
+    }
+  }
+  input.click()
+}
+
+const handleDeleteFromContext = () => {
+  showContextMenu.value = false
+  if (selectedImageIds.value.size > 0) {
+    removeSelectedImages()
+  }
+  if (selectedArtboardIds.value.size > 0) {
+    handleDeleteArtboard()
+  }
+}
+
 
 const handleCreateArtboard = () => {
   const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
@@ -716,7 +770,7 @@ const draw = () => {
 
 const handleResize = () => {
   canvasWidth.value = window.innerWidth
-  canvasHeight.value = window.innerHeight - headerHeight
+  canvasHeight.value = window.innerHeight
 }
 
 onMounted(() => {
@@ -724,6 +778,11 @@ onMounted(() => {
   window.addEventListener('paste', handlePaste)
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
+  
+  // Close context menu on click outside
+  window.addEventListener('click', () => {
+    showContextMenu.value = false
+  })
   
   // Create default artboard if none exists
   if (artboards.value.length === 0) {
