@@ -73,12 +73,15 @@
       :y="contextMenuPosition.y"
       :hasSelection="selectedImageIds.size > 0 || selectedArtboardIds.size > 0"
       :hasImageSelection="selectedImageIds.size > 0"
+      :hasArtboardSelection="selectedArtboardIds.size > 0"
       @close="showContextMenu = false"
       @addImage="handleAddImageFromContext"
       @paste="handlePaste"
       @delete="handleDeleteFromContext"
       @createArtboard="handleCreateArtboard"
       @editDescription="handleEditDescription"
+      @renameArtboard="handleRenameArtboard"
+      @exportAsHtml="handleExportAsHtml"
     />
     
     <!-- Image Text Editor -->
@@ -89,6 +92,15 @@
       @save="handleSaveImageText"
       @close="editingImage = null"
     />
+    
+    <!-- Artboard Name Editor -->
+    <ArtboardNameEditor
+      v-if="editingArtboard"
+      :editingArtboard="editingArtboard"
+      :position="artboardEditorPosition"
+      @save="handleSaveArtboardName"
+      @close="editingArtboard = null"
+    />
   </div>
 </template>
 
@@ -97,6 +109,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import FloatingToolbar from './FloatingToolbar.vue'
 import ContextMenu from './ContextMenu.vue'
 import ImageTextEditor from './ImageTextEditor.vue'
+import ArtboardNameEditor from './ArtboardNameEditor.vue'
 import { useCanvas } from '../composables/useCanvas'
 import { useImageManager } from '../composables/useImageManager'
 import { useSelection } from '../composables/useSelection'
@@ -105,7 +118,8 @@ import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
 import { useArtboardManager } from '../composables/useArtboardManager'
-import type { Point, ImageItem, ResizeHandle, Viewport } from '../types'
+import { useHtmlExport } from '../composables/useHtmlExport'
+import type { Point, ImageItem, ResizeHandle, Viewport, Artboard } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const canvasWidth = ref(window.innerWidth)
@@ -116,6 +130,8 @@ const contextMenuPosition = ref({ x: 0, y: 0 })
 
 const editingImage = ref<ImageItem | null>(null)
 const textEditorPosition = ref({ x: 0, y: 0 })
+const editingArtboard = ref<Artboard | null>(null)
+const artboardEditorPosition = ref({ x: 0, y: 0 })
 
 const canvas = useCanvas(canvasRef)
 const imageManager = useImageManager()
@@ -125,6 +141,7 @@ const touch = useTouch()
 const inputMode = useInputMode()
 const imageCache = useImageCache()
 const artboardManager = useArtboardManager()
+const { exportAsHtmlArchive } = useHtmlExport()
 
 const isSpacePressed = ref(false)
 const animationFrameId = ref<number | null>(null)
@@ -715,6 +732,57 @@ const handleDeleteArtboard = () => {
     artboardManager.removeItemsFromArtboard(artboardId, images.value)
   })
   clearArtboardSelection()
+}
+
+const handleRenameArtboard = () => {
+  showContextMenu.value = false
+  
+  if (selectedArtboardIds.value.size > 0) {
+    const artboardId = Array.from(selectedArtboardIds.value)[0]
+    const artboard = artboards.value.find(a => a.id === artboardId)
+    
+    if (artboard) {
+      // Calculate position for name editor (center of artboard)
+      const rect = canvasRef.value?.getBoundingClientRect()
+      if (!rect) return
+      
+      const screenX = artboard.position.x * viewport.value.zoom + viewport.value.x + rect.left
+      const screenY = artboard.position.y * viewport.value.zoom + viewport.value.y + rect.top
+      
+      artboardEditorPosition.value = {
+        x: screenX,
+        y: screenY
+      }
+      
+      editingArtboard.value = artboard
+    }
+  }
+}
+
+const handleSaveArtboardName = (newName: string) => {
+  if (editingArtboard.value && newName.trim()) {
+    editingArtboard.value.name = newName.trim()
+  }
+  editingArtboard.value = null
+}
+
+const handleExportAsHtml = async () => {
+  showContextMenu.value = false
+  
+  if (selectedArtboardIds.value.size > 0) {
+    const artboardId = Array.from(selectedArtboardIds.value)[0]
+    const artboard = artboards.value.find(a => a.id === artboardId)
+    
+    if (artboard) {
+      try {
+        await exportAsHtmlArchive(artboard, images.value)
+        console.log('HTML gallery exported successfully')
+      } catch (error) {
+        console.error('Failed to export HTML gallery:', error)
+        alert('Failed to export HTML gallery. Please make sure the artboard contains images.')
+      }
+    }
+  }
 }
 
 const draw = () => {

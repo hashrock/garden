@@ -52,6 +52,28 @@
         </button>
         
         <button
+          v-if="hasArtboardSelection"
+          @click="$emit('renameArtboard')"
+          class="w-full px-3 py-2 text-left hover:bg-gray-100 transition-colors text-sm flex items-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+          Rename Artboard
+        </button>
+        
+        <button
+          v-if="hasArtboardSelection"
+          @click="$emit('exportAsHtml')"
+          class="w-full px-3 py-2 text-left hover:bg-gray-100 transition-colors text-sm flex items-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+          </svg>
+          Export as HTML
+        </button>
+        
+        <button
           @click="$emit('delete')"
           class="w-full px-3 py-2 text-left hover:bg-gray-100 transition-colors text-sm flex items-center gap-2 text-red-600"
         >
@@ -71,6 +93,7 @@ defineProps<{
   y: number
   hasSelection: boolean
   hasImageSelection?: boolean
+  hasArtboardSelection?: boolean
 }>()
 
 defineEmits<{
@@ -80,6 +103,8 @@ defineEmits<{
   delete: []
   createArtboard: []
   editDescription: []
+  renameArtboard: []
+  exportAsHtml: []
 }>()
 
 // Close menu when clicking outside

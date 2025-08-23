@@ -12,6 +12,7 @@
     "type-check": "vue-tsc -b"
   },
   "dependencies": {
+    "colorthief": "^2.6.0",
     "konva": "^9.3.22",
     "pinia": "^3.0.3",
     "uuid": "^11.1.0",
