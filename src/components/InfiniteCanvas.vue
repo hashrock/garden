@@ -74,12 +74,14 @@
       :hasSelection="selectedImageIds.size > 0 || selectedArtboardIds.size > 0"
       :hasImageSelection="selectedImageIds.size > 0"
       :hasArtboardSelection="selectedArtboardIds.size > 0"
+      :imageCount="selectedImageIds.size"
       @close="showContextMenu = false"
       @addImage="handleAddImageFromContext"
       @paste="handlePaste"
       @delete="handleDeleteFromContext"
       @createArtboard="handleCreateArtboard"
       @editDescription="handleEditDescription"
+      @tidyImages="handleTidyImages"
       @renameArtboard="handleRenameArtboard"
       @exportAsHtml="handleExportAsHtml"
     />
@@ -119,6 +121,7 @@ import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
 import { useArtboardManager } from '../composables/useArtboardManager'
 import { useHtmlExport } from '../composables/useHtmlExport'
+import { useSkylinePacker } from '../composables/useSkylinePacker'
 import type { Point, ImageItem, ResizeHandle, Viewport, Artboard } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -142,6 +145,7 @@ const inputMode = useInputMode()
 const imageCache = useImageCache()
 const artboardManager = useArtboardManager()
 const { exportAsHtmlArchive } = useHtmlExport()
+const { tidyImages } = useSkylinePacker()
 
 const isSpacePressed = ref(false)
 const animationFrameId = ref<number | null>(null)
@@ -764,6 +768,50 @@ const handleSaveArtboardName = (newName: string) => {
     editingArtboard.value.name = newName.trim()
   }
   editingArtboard.value = null
+}
+
+const handleTidyImages = () => {
+  showContextMenu.value = false
+  
+  if (selectedImageIds.value.size > 1) {
+    const selectedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
+    
+    if (selectedImages.length > 0) {
+      // Calculate the bounding box of selected images to determine start position
+      const minX = Math.min(...selectedImages.map(img => img.position.x))
+      const minY = Math.min(...selectedImages.map(img => img.position.y))
+      
+      // Check if images are in an artboard
+      const artboardId = selectedImages[0].artboardId
+      const inArtboard = artboardId && selectedImages.every(img => img.artboardId === artboardId)
+      
+      let startPosition: Point
+      
+      if (inArtboard && artboardId) {
+        // If all images are in the same artboard, arrange within artboard bounds
+        const artboard = artboards.value.find(a => a.id === artboardId)
+        if (artboard) {
+          startPosition = {
+            x: artboard.position.x + 20, // Add some padding
+            y: artboard.position.y + 40  // Leave space for artboard name
+          }
+        } else {
+          startPosition = { x: minX, y: minY }
+        }
+      } else {
+        // Use current minimum position as start
+        startPosition = { x: minX, y: minY }
+      }
+      
+      // Apply tidy arrangement using Skyline algorithm
+      tidyImages(selectedImages, startPosition)
+      
+      // If images are in an artboard, auto-resize the artboard to fit
+      if (inArtboard && artboardId) {
+        autoResizeArtboard(artboardId, images.value)
+      }
+    }
+  }
 }
 
 const handleExportAsHtml = async () => {
