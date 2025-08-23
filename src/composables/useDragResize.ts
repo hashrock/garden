@@ -136,7 +136,7 @@ export function useDragResize() {
     initialPosition.value = { ...image.position }
   }
 
-  const updateResize = (currentPoint: Point, maintainAspectRatio: boolean = false) => {
+  const updateResize = (currentPoint: Point, maintainAspectRatio: boolean = true) => {
     if (!isResizing.value || !resizeStart.value || !resizedImage.value || 
         !initialSize.value || !initialPosition.value || !resizeHandle.value) return
 
@@ -153,21 +153,21 @@ export function useDragResize() {
     switch (resizeHandle.value) {
       case 'se':
         newWidth = initialSize.value.width + deltaX
-        newHeight = maintainAspectRatio ? newWidth / aspectRatio : initialSize.value.height + deltaY
+        newHeight = !maintainAspectRatio ? initialSize.value.height + deltaY : newWidth / aspectRatio
         break
       case 'sw':
         newWidth = initialSize.value.width - deltaX
-        newHeight = maintainAspectRatio ? newWidth / aspectRatio : initialSize.value.height + deltaY
+        newHeight = !maintainAspectRatio ? initialSize.value.height + deltaY : newWidth / aspectRatio
         newX = initialPosition.value.x + deltaX
         break
       case 'ne':
         newWidth = initialSize.value.width + deltaX
-        newHeight = maintainAspectRatio ? newWidth / aspectRatio : initialSize.value.height - deltaY
+        newHeight = !maintainAspectRatio ? initialSize.value.height - deltaY : newWidth / aspectRatio
         newY = initialPosition.value.y + deltaY
         break
       case 'nw':
         newWidth = initialSize.value.width - deltaX
-        newHeight = maintainAspectRatio ? newWidth / aspectRatio : initialSize.value.height - deltaY
+        newHeight = !maintainAspectRatio ? initialSize.value.height - deltaY : newWidth / aspectRatio
         newX = initialPosition.value.x + deltaX
         newY = initialPosition.value.y + deltaY
         break

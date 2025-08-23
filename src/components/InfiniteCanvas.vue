@@ -256,7 +256,7 @@ const handlePointerMove = (e: PointerEvent) => {
   } else if (isResizingArtboard.value) {
     updateResizeArtboard(canvasPoint)
   } else if (isResizing.value) {
-    updateResize(canvasPoint, e.shiftKey)
+    updateResize(canvasPoint, !e.shiftKey)
   } else if (isSelecting.value) {
     updateSelection(screenPoint)
   } else if (e.pointerType !== 'touch') {
