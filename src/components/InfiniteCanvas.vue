@@ -2,8 +2,9 @@
   <div class="relative w-full h-full overflow-hidden bg-gray-100">
     <Toolbar
       :images="images"
+      :artboards="artboards"
       :selectedImageIds="selectedImageIds"
-      :selectedGroupIds="selectedGroupIds"
+      :selectedArtboardIds="selectedArtboardIds"
       :viewport="viewport"
       :canvasSize="{ width: 10000, height: 10000 }"
       @newProject="handleNewProject"
@@ -14,8 +15,8 @@
       @clearSelection="clearSelection"
       @zoom="handleZoomFromToolbar"
       @resetViewport="resetViewport"
-      @createGroup="handleCreateGroup"
-      @ungroupSelected="handleUngroupSelected"
+      @createArtboard="handleCreateArtboard"
+      @deleteArtboard="handleDeleteArtboard"
     />
     
     <canvas
@@ -62,8 +63,8 @@ import { useDragResize } from '../composables/useDragResize'
 import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
-import { useGroupManager } from '../composables/useGroupManager'
-import type { Point, ImageItem, Group } from '../types'
+import { useArtboardManager } from '../composables/useArtboardManager'
+import type { Point, ImageItem, Artboard } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const headerHeight = 48
@@ -77,7 +78,7 @@ const dragResize = useDragResize()
 const touch = useTouch()
 const inputMode = useInputMode()
 const imageCache = useImageCache()
-const groupManager = useGroupManager()
+const artboardManager = useArtboardManager()
 
 const isSpacePressed = ref(false)
 const animationFrameId = ref<number | null>(null)
@@ -85,8 +86,8 @@ const animationFrameId = ref<number | null>(null)
 const { isPanning, viewport, screenToCanvas, startPan, updatePan, endPan, zoom, resetViewport } = canvas
 const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, selectAll, clearAllImages, addImage } = imageManager
 const { isSelecting, selectionRect, startSelection, updateSelection, endSelection } = selection
-const { isDragging, isDraggingGroup, isResizing, startDrag, updateDrag, endDrag, startDragGroup, updateDragGroup, getResizeHandle, startResize, updateResize, endResize, getCursor } = dragResize
-const { groups, selectedGroupIds, getGroupAt, selectGroup, clearGroupSelection, createGroupFromSelection, ungroupItems, moveGroupChildren } = groupManager
+const { isDragging, isDraggingArtboard, isResizing, isResizingArtboard, startDrag, updateDrag, endDrag, startDragArtboard, updateDragArtboard, getResizeHandle, startResize, updateResize, endResize, startResizeArtboard, updateResizeArtboard, getCursor } = dragResize
+const { artboards, selectedArtboardIds, getArtboardAt, getArtboardNameAt, selectArtboard, clearArtboardSelection, createArtboardFromSelection, removeItemsFromArtboard, moveArtboardChildren, autoResizeArtboard, createArtboard } = artboardManager
 
 const handlePointerDown = (e: PointerEvent) => {
   if (!canvasRef.value) return
@@ -125,25 +126,51 @@ const handlePointerDown = (e: PointerEvent) => {
   }
   
   if (e.button === 0 && e.pointerType !== 'touch') {
-    const clickedGroup = getGroupAt(canvasPoint)
+    const clickedArtboardName = getArtboardNameAt(canvasPoint)
+    const clickedArtboard = getArtboardAt(canvasPoint)
     const clickedImage = getImageAt(canvasPoint)
     
-    if (clickedGroup && !clickedImage) {
+    // Click on artboard name to select
+    if (clickedArtboardName) {
       if (e.ctrlKey || e.metaKey) {
-        if (selectedGroupIds.value.has(clickedGroup.id)) {
-          groupManager.deselectGroup(clickedGroup.id)
+        if (selectedArtboardIds.value.has(clickedArtboardName.id)) {
+          artboardManager.deselectArtboard(clickedArtboardName.id)
         } else {
-          selectGroup(clickedGroup.id, true)
+          selectArtboard(clickedArtboardName.id, true)
         }
       } else {
         clearSelection()
-        clearGroupSelection()
-        selectGroup(clickedGroup.id)
+        clearArtboardSelection()
+        selectArtboard(clickedArtboardName.id)
+      }
+      return
+    }
+    
+    // Check for artboard resize handle
+    if (clickedArtboard && selectedArtboardIds.value.has(clickedArtboard.id)) {
+      const handle = artboardManager.getResizeHandle(clickedArtboard, canvasPoint)
+      if (handle) {
+        startResizeArtboard(clickedArtboard, handle, canvasPoint)
+        return
+      }
+    }
+    
+    if (clickedArtboard && !clickedImage) {
+      if (e.ctrlKey || e.metaKey) {
+        if (selectedArtboardIds.value.has(clickedArtboard.id)) {
+          artboardManager.deselectArtboard(clickedArtboard.id)
+        } else {
+          selectArtboard(clickedArtboard.id, true)
+        }
+      } else {
+        clearSelection()
+        clearArtboardSelection()
+        selectArtboard(clickedArtboard.id)
       }
       
-      const selectedGroups = groups.value.filter(g => selectedGroupIds.value.has(g.id))
-      if (selectedGroups.length > 0) {
-        dragResize.startDragGroup(clickedGroup, canvasPoint, selectedGroups)
+      const selectedArtboards = artboards.value.filter(a => selectedArtboardIds.value.has(a.id))
+      if (selectedArtboards.length > 0) {
+        dragResize.startDragArtboard(clickedArtboard, canvasPoint, selectedArtboards)
       }
     } else if (clickedImage) {
       const handle = getResizeHandle(clickedImage, canvasPoint)
@@ -163,7 +190,7 @@ const handlePointerDown = (e: PointerEvent) => {
     } else {
       if (!e.ctrlKey && !e.metaKey) {
         clearSelection()
-        clearGroupSelection()
+        clearArtboardSelection()
       }
       startSelection(screenPoint)
     }
@@ -214,10 +241,23 @@ const handlePointerMove = (e: PointerEvent) => {
   
   if (isPanning.value) {
     updatePan(e.clientX, e.clientY)
-  } else if (isDraggingGroup.value) {
-    updateDragGroup(canvasPoint, images.value)
+  } else if (isDraggingArtboard.value) {
+    updateDragArtboard(canvasPoint, images.value)
   } else if (isDragging.value) {
     updateDrag(canvasPoint)
+    
+    // Visual feedback: highlight target artboard
+    const targetArtboard = getArtboardAt(canvasPoint)
+    artboards.value.forEach(artboard => {
+      // Reset all artboards' drop target state
+      artboard.isDropTarget = false
+    })
+    if (targetArtboard) {
+      // Mark as drop target
+      targetArtboard.isDropTarget = true
+    }
+  } else if (isResizingArtboard.value) {
+    updateResizeArtboard(canvasPoint, e.shiftKey)
   } else if (isResizing.value) {
     updateResize(canvasPoint, e.shiftKey)
   } else if (isSelecting.value) {
@@ -249,10 +289,48 @@ const handlePointerUp = (e: PointerEvent) => {
   
   if (isPanning.value) {
     endPan()
-  } else if (isDraggingGroup.value) {
+  } else if (isDraggingArtboard.value) {
     endDrag()
   } else if (isDragging.value) {
+    // Check if image was dropped on an artboard
+    const rect = canvasRef.value.getBoundingClientRect()
+    const screenPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    const canvasPoint = screenToCanvas(screenPoint.x, screenPoint.y)
+    
+    // Find which artboard the image is over
+    const targetArtboard = getArtboardAt(canvasPoint)
+    
+    // Update image artboard assignment
+    const draggedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
+    draggedImages.forEach(img => {
+      // Remove from previous artboard
+      if (img.artboardId) {
+        const prevArtboard = artboards.value.find(a => a.id === img.artboardId)
+        if (prevArtboard) {
+          artboardManager.removeFromArtboard(prevArtboard.id, [img.id])
+        }
+      }
+      
+      // Add to new artboard
+      if (targetArtboard) {
+        img.artboardId = targetArtboard.id
+        artboardManager.addToArtboard(targetArtboard.id, [img.id])
+        // Auto-resize the artboard to fit the new image
+        autoResizeArtboard(targetArtboard.id, images.value)
+      } else {
+        // Remove from artboard if dropped outside
+        delete img.artboardId
+      }
+    })
+    
+    // Clear drop target state
+    artboards.value.forEach(artboard => {
+      artboard.isDropTarget = false
+    })
+    
     endDrag()
+  } else if (isResizingArtboard.value) {
+    endResize()
   } else if (isResizing.value) {
     endResize()
   } else if (isSelecting.value && selectionRect.value) {
@@ -286,6 +364,12 @@ const handlePointerCancel = (e: PointerEvent) => {
   
   if (touch.pointerCount.value === 0) {
     touch.clearPointers()
+    
+    // Clear drop target state
+    artboards.value.forEach(artboard => {
+      artboard.isDropTarget = false
+    })
+    
     endPan()
     endDrag()
     endResize()
@@ -367,22 +451,19 @@ const handleKeyDown = (e: KeyboardEvent) => {
   } else if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
     e.preventDefault()
     imageManager.selectAll()
-  } else if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
     e.preventDefault()
-    const selectedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
-    if (selectedImages.length > 0) {
-      const group = createGroupFromSelection(selectedImages)
-      if (group) {
-        clearSelection()
-        selectGroup(group.id)
-      }
-    }
-  } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'g') {
-    e.preventDefault()
-    selectedGroupIds.value.forEach(groupId => {
-      ungroupItems(groupId, images.value)
-    })
-    clearGroupSelection()
+    // Create new artboard at center of viewport
+    const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
+    const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
+    const artboard = createArtboard(
+      `Artboard ${artboards.value.length + 1}`,
+      { x: centerX - 400, y: centerY - 300 },
+      { width: 800, height: 600 }
+    )
+    clearSelection()
+    clearArtboardSelection()
+    selectArtboard(artboard.id)
   } else if (e.key === 'Escape') {
     clearSelection()
     endSelection()
@@ -424,22 +505,24 @@ const handleZoomFromToolbar = (delta: number, centerX: number, centerY: number) 
   zoom(delta, centerX, centerY)
 }
 
-const handleCreateGroup = () => {
-  const selectedImages = images.value.filter(img => selectedImageIds.value.has(img.id))
-  if (selectedImages.length >= 2) {
-    const group = createGroupFromSelection(selectedImages)
-    if (group) {
-      clearSelection()
-      selectGroup(group.id)
-    }
-  }
+const handleCreateArtboard = () => {
+  const centerX = (canvasWidth.value / 2 - viewport.value.x) / viewport.value.zoom
+  const centerY = (canvasHeight.value / 2 - viewport.value.y) / viewport.value.zoom
+  const artboard = createArtboard(
+    `Artboard ${artboards.value.length + 1}`,
+    { x: centerX - 400, y: centerY - 300 },
+    { width: 800, height: 600 }
+  )
+  clearSelection()
+  clearArtboardSelection()
+  selectArtboard(artboard.id)
 }
 
-const handleUngroupSelected = () => {
-  selectedGroupIds.value.forEach(groupId => {
-    ungroupItems(groupId, images.value)
+const handleDeleteArtboard = () => {
+  selectedArtboardIds.value.forEach(artboardId => {
+    removeItemsFromArtboard(artboardId, images.value)
   })
-  clearGroupSelection()
+  clearArtboardSelection()
 }
 
 const draw = () => {
@@ -454,72 +537,152 @@ const draw = () => {
   ctx.translate(viewport.value.x, viewport.value.y)
   ctx.scale(viewport.value.zoom, viewport.value.zoom)
   
-  // 背景の描画
-  ctx.fillStyle = '#f0f0f0'
+  // Canvas background (light gray)
+  ctx.fillStyle = '#f5f5f5'
   ctx.fillRect(0, 0, 10000, 10000)
   
-  // グリッドの描画
-  const pattern = 20
-  ctx.strokeStyle = '#e0e0e0'
-  ctx.lineWidth = 1
-  
-  for (let x = 0; x <= 10000; x += pattern) {
+  // Draw artboards
+  const sortedArtboards = [...artboards.value].sort((a, b) => a.zIndex - b.zIndex)
+  for (const artboard of sortedArtboards) {
+    // Artboard shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.1)'
+    ctx.shadowBlur = 10 / viewport.value.zoom
+    ctx.shadowOffsetX = 2 / viewport.value.zoom
+    ctx.shadowOffsetY = 2 / viewport.value.zoom
+    
+    // Artboard background
+    ctx.fillStyle = artboard.backgroundColor || '#ffffff'
+    ctx.fillRect(
+      artboard.position.x,
+      artboard.position.y,
+      artboard.size.width,
+      artboard.size.height
+    )
+    
+    // Reset shadow
+    ctx.shadowColor = 'transparent'
+    ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
+    ctx.shadowOffsetY = 0
+    
+    // Artboard grid
+    const gridSize = 20
+    ctx.strokeStyle = '#f0f0f0'
+    ctx.lineWidth = 0.5 / viewport.value.zoom
+    
+    // Clip to artboard bounds
+    ctx.save()
     ctx.beginPath()
-    ctx.moveTo(x, 0)
-    ctx.lineTo(x, 10000)
-    ctx.stroke()
-  }
-  
-  for (let y = 0; y <= 10000; y += pattern) {
-    ctx.beginPath()
-    ctx.moveTo(0, y)
-    ctx.lineTo(10000, y)
-    ctx.stroke()
-  }
-  
-  // グループの描画
-  const sortedGroups = [...groups.value].sort((a, b) => a.zIndex - b.zIndex)
-  for (const group of sortedGroups) {
-    // グループの背景
-    if (group.backgroundColor) {
-      ctx.fillStyle = group.backgroundColor
+    ctx.rect(
+      artboard.position.x,
+      artboard.position.y,
+      artboard.size.width,
+      artboard.size.height
+    )
+    ctx.clip()
+    
+    // Draw grid lines
+    for (let x = artboard.position.x; x <= artboard.position.x + artboard.size.width; x += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(x, artboard.position.y)
+      ctx.lineTo(x, artboard.position.y + artboard.size.height)
+      ctx.stroke()
+    }
+    
+    for (let y = artboard.position.y; y <= artboard.position.y + artboard.size.height; y += gridSize) {
+      ctx.beginPath()
+      ctx.moveTo(artboard.position.x, y)
+      ctx.lineTo(artboard.position.x + artboard.size.width, y)
+      ctx.stroke()
+    }
+    
+    ctx.restore()
+    
+    // Artboard border
+    ctx.strokeStyle = artboard.isDropTarget ? '#3b82f6' : (artboard.borderColor || '#e0e0e0')
+    ctx.lineWidth = artboard.isDropTarget ? 2 / viewport.value.zoom : 1 / viewport.value.zoom
+    ctx.strokeRect(
+      artboard.position.x,
+      artboard.position.y,
+      artboard.size.width,
+      artboard.size.height
+    )
+    
+    // Drop target highlight
+    if (artboard.isDropTarget) {
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)'
       ctx.fillRect(
-        group.position.x,
-        group.position.y,
-        group.size.width,
-        group.size.height
+        artboard.position.x,
+        artboard.position.y,
+        artboard.size.width,
+        artboard.size.height
       )
     }
     
-    // グループの枠線
-    ctx.strokeStyle = group.borderColor || '#d0d0d0'
-    ctx.lineWidth = 2 / viewport.value.zoom
+    // Artboard name label
+    const labelHeight = 25 / viewport.value.zoom
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(
+      artboard.position.x,
+      artboard.position.y - labelHeight,
+      artboard.size.width,
+      labelHeight
+    )
+    
+    ctx.strokeStyle = '#e0e0e0'
+    ctx.lineWidth = 1 / viewport.value.zoom
     ctx.strokeRect(
-      group.position.x,
-      group.position.y,
-      group.size.width,
-      group.size.height
+      artboard.position.x,
+      artboard.position.y - labelHeight,
+      artboard.size.width,
+      labelHeight
     )
     
-    // グループ名の表示
-    ctx.fillStyle = '#666'
-    ctx.font = `${14 / viewport.value.zoom}px sans-serif`
+    ctx.fillStyle = '#333'
+    ctx.font = `${12 / viewport.value.zoom}px sans-serif`
+    ctx.textBaseline = 'middle'
     ctx.fillText(
-      group.name,
-      group.position.x + 5 / viewport.value.zoom,
-      group.position.y - 5 / viewport.value.zoom
+      artboard.name,
+      artboard.position.x + 10 / viewport.value.zoom,
+      artboard.position.y - labelHeight / 2
     )
     
-    // 選択状態の表示
-    if (selectedGroupIds.value.has(group.id)) {
+    // Selection state
+    if (selectedArtboardIds.value.has(artboard.id)) {
       ctx.strokeStyle = '#3b82f6'
-      ctx.lineWidth = 3 / viewport.value.zoom
+      ctx.lineWidth = 2 / viewport.value.zoom
       ctx.strokeRect(
-        group.position.x,
-        group.position.y,
-        group.size.width,
-        group.size.height
+        artboard.position.x,
+        artboard.position.y - labelHeight,
+        artboard.size.width,
+        artboard.size.height + labelHeight
       )
+      
+      // Draw resize handles
+      if (selectedArtboardIds.value.size === 1) {
+        const handleSize = 8 / viewport.value.zoom
+        ctx.fillStyle = '#3b82f6'
+        
+        const handles = [
+          { x: artboard.position.x, y: artboard.position.y },
+          { x: artboard.position.x + artboard.size.width / 2, y: artboard.position.y },
+          { x: artboard.position.x + artboard.size.width, y: artboard.position.y },
+          { x: artboard.position.x + artboard.size.width, y: artboard.position.y + artboard.size.height / 2 },
+          { x: artboard.position.x + artboard.size.width, y: artboard.position.y + artboard.size.height },
+          { x: artboard.position.x + artboard.size.width / 2, y: artboard.position.y + artboard.size.height },
+          { x: artboard.position.x, y: artboard.position.y + artboard.size.height },
+          { x: artboard.position.x, y: artboard.position.y + artboard.size.height / 2 }
+        ]
+        
+        handles.forEach(handle => {
+          ctx.fillRect(
+            handle.x - handleSize / 2,
+            handle.y - handleSize / 2,
+            handleSize,
+            handleSize
+          )
+        })
+      }
     }
   }
   

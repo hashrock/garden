@@ -60,12 +60,20 @@
         </button>
         
         <button
-          @click="handleGroup"
+          @click="handleNewArtboard"
           class="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded text-sm"
-          title="グループ化 (Ctrl+G)"
-          :disabled="selectedCount < 2 && selectedGroupCount === 0"
+          title="新規アートボード (Ctrl+N)"
         >
-          {{ selectedGroupCount > 0 ? 'グループ解除' : 'グループ化' }}
+          新規アートボード
+        </button>
+        
+        <button
+          @click="handleDeleteArtboard"
+          class="px-3 py-1 bg-purple-400 hover:bg-purple-500 text-white rounded text-sm"
+          title="アートボード削除"
+          :disabled="selectedArtboardCount === 0"
+        >
+          アートボード削除 ({{ selectedArtboardCount }})
         </button>
         
         <button
@@ -120,7 +128,7 @@
         </div>
         
         <div class="text-sm text-gray-600">
-          画像: {{ imageCount }}枚
+          画像: {{ imageCount }}枚 | アートボード: {{ artboardCount }}
         </div>
       </div>
     </div>
@@ -131,12 +139,13 @@
 import { computed } from 'vue'
 import { useProjectIO } from '../composables/useProjectIO'
 import { useInputMode } from '../composables/useInputMode'
-import type { ImageItem } from '../types'
+import type { ImageItem, Artboard } from '../types'
 
 const props = defineProps<{
   images: ImageItem[]
+  artboards?: Artboard[]
   selectedImageIds: Set<string>
-  selectedGroupIds?: Set<string>
+  selectedArtboardIds?: Set<string>
   viewport: { x: number; y: number; zoom: number }
   canvasSize: { width: number; height: number }
 }>()
@@ -150,8 +159,8 @@ const emit = defineEmits<{
   clearSelection: []
   zoom: [delta: number, centerX: number, centerY: number]
   resetViewport: []
-  createGroup: []
-  ungroupSelected: []
+  createArtboard: []
+  deleteArtboard: []
 }>()
 
 const projectIO = useProjectIO()
@@ -159,7 +168,8 @@ const inputModeManager = useInputMode()
 
 const imageCount = computed(() => props.images.length)
 const selectedCount = computed(() => props.selectedImageIds.size)
-const selectedGroupCount = computed(() => props.selectedGroupIds?.size || 0)
+const selectedArtboardCount = computed(() => props.selectedArtboardIds?.size || 0)
+const artboardCount = computed(() => props.artboards?.length || 0)
 const zoomLevel = computed(() => props.viewport.zoom)
 const inputMode = computed(() => inputModeManager.currentMode.value)
 const inputModeDescription = computed(() => {
@@ -252,11 +262,11 @@ const handleToggleInputMode = () => {
   inputModeManager.toggleMode()
 }
 
-const handleGroup = () => {
-  if (selectedGroupCount.value > 0) {
-    emit('ungroupSelected')
-  } else if (selectedCount.value >= 2) {
-    emit('createGroup')
-  }
+const handleNewArtboard = () => {
+  emit('createArtboard')
+}
+
+const handleDeleteArtboard = () => {
+  emit('deleteArtboard')
 }
 </script>

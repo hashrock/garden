@@ -14,7 +14,7 @@ export interface Viewport {
   zoom: number
 }
 
-export interface Group {
+export interface Artboard {
   id: string
   name: string
   position: Point
@@ -22,9 +22,9 @@ export interface Group {
   children: string[]
   zIndex: number
   selected?: boolean
-  expanded: boolean
   backgroundColor?: string
   borderColor?: string
+  isDropTarget?: boolean
 }
 
 export interface ImageItem {
@@ -37,7 +37,7 @@ export interface ImageItem {
   rotation: number
   zIndex: number
   selected?: boolean
-  groupId?: string
+  artboardId?: string
 }
 
 export interface ProjectMetadata {

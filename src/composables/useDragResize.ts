@@ -1,23 +1,25 @@
 import { ref, computed } from 'vue'
-import type { Point, Size, ImageItem, Group } from '../types'
+import type { Point, Size, ImageItem, Artboard } from '../types'
 
 type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null
 
 export function useDragResize() {
   const isDragging = ref(false)
-  const isDraggingGroup = ref(false)
+  const isDraggingArtboard = ref(false)
   const isResizing = ref(false)
+  const isResizingArtboard = ref(false)
   const dragStart = ref<Point | null>(null)
   const draggedImage = ref<ImageItem | null>(null)
   const draggedImages = ref<ImageItem[]>([])
-  const draggedGroup = ref<Group | null>(null)
-  const draggedGroups = ref<Group[]>([])
+  const draggedArtboard = ref<Artboard | null>(null)
+  const draggedArtboards = ref<Artboard[]>([])
   const initialPositions = ref<Map<string, Point>>(new Map())
-  const initialGroupPositions = ref<Map<string, Point>>(new Map())
+  const initialArtboardPositions = ref<Map<string, Point>>(new Map())
   
   const resizeHandle = ref<ResizeHandle>(null)
   const resizeStart = ref<Point | null>(null)
   const resizedImage = ref<ImageItem | null>(null)
+  const resizedArtboard = ref<Artboard | null>(null)
   const initialSize = ref<Size | null>(null)
   const initialPosition = ref<Point | null>(null)
 
@@ -52,51 +54,51 @@ export function useDragResize() {
 
   const endDrag = () => {
     isDragging.value = false
-    isDraggingGroup.value = false
+    isDraggingArtboard.value = false
     dragStart.value = null
     draggedImage.value = null
     draggedImages.value = []
-    draggedGroup.value = null
-    draggedGroups.value = []
+    draggedArtboard.value = null
+    draggedArtboards.value = []
     initialPositions.value.clear()
-    initialGroupPositions.value.clear()
+    initialArtboardPositions.value.clear()
   }
 
-  const startDragGroup = (group: Group, startPoint: Point, selectedGroups: Group[] = []) => {
-    isDraggingGroup.value = true
+  const startDragArtboard = (artboard: Artboard, startPoint: Point, selectedArtboards: Artboard[] = []) => {
+    isDraggingArtboard.value = true
     dragStart.value = startPoint
-    draggedGroup.value = group
-    draggedGroups.value = selectedGroups.length > 0 ? selectedGroups : [group]
+    draggedArtboard.value = artboard
+    draggedArtboards.value = selectedArtboards.length > 0 ? selectedArtboards : [artboard]
     
-    initialGroupPositions.value.clear()
-    draggedGroups.value.forEach(g => {
-      initialGroupPositions.value.set(g.id, { ...g.position })
+    initialArtboardPositions.value.clear()
+    draggedArtboards.value.forEach(a => {
+      initialArtboardPositions.value.set(a.id, { ...a.position })
     })
   }
 
-  const updateDragGroup = (currentPoint: Point, images: ImageItem[]) => {
-    if (!isDraggingGroup.value || !dragStart.value) return
+  const updateDragArtboard = (currentPoint: Point, images: ImageItem[]) => {
+    if (!isDraggingArtboard.value || !dragStart.value) return
 
     const deltaX = currentPoint.x - dragStart.value.x
     const deltaY = currentPoint.y - dragStart.value.y
 
-    draggedGroups.value.forEach(group => {
-      const initialPos = initialGroupPositions.value.get(group.id)
+    draggedArtboards.value.forEach(artboard => {
+      const initialPos = initialArtboardPositions.value.get(artboard.id)
       if (initialPos) {
-        const oldPosition = { ...group.position }
-        group.position = {
+        const oldPosition = { ...artboard.position }
+        artboard.position = {
           x: initialPos.x + deltaX,
           y: initialPos.y + deltaY
         }
         
-        const groupDeltaX = group.position.x - oldPosition.x
-        const groupDeltaY = group.position.y - oldPosition.y
+        const artboardDeltaX = artboard.position.x - oldPosition.x
+        const artboardDeltaY = artboard.position.y - oldPosition.y
         
-        group.children.forEach(childId => {
+        artboard.children.forEach(childId => {
           const image = images.find(img => img.id === childId)
           if (image) {
-            image.position.x += groupDeltaX
-            image.position.y += groupDeltaY
+            image.position.x += artboardDeltaX
+            image.position.y += artboardDeltaY
           }
         })
       }
@@ -209,9 +211,11 @@ export function useDragResize() {
 
   const endResize = () => {
     isResizing.value = false
+    isResizingArtboard.value = false
     resizeHandle.value = null
     resizeStart.value = null
     resizedImage.value = null
+    resizedArtboard.value = null
     initialSize.value = null
     initialPosition.value = null
   }
@@ -235,20 +239,89 @@ export function useDragResize() {
     }
   }
 
+  const startResizeArtboard = (artboard: Artboard, handle: ResizeHandle, startPoint: Point) => {
+    isResizingArtboard.value = true
+    resizeHandle.value = handle
+    resizeStart.value = startPoint
+    resizedArtboard.value = artboard
+    initialSize.value = { ...artboard.size }
+    initialPosition.value = { ...artboard.position }
+  }
+
+  const updateResizeArtboard = (currentPoint: Point, maintainAspectRatio: boolean = false) => {
+    if (!isResizingArtboard.value || !resizeStart.value || !resizedArtboard.value || 
+        !initialSize.value || !initialPosition.value || !resizeHandle.value) return
+
+    const deltaX = currentPoint.x - resizeStart.value.x
+    const deltaY = currentPoint.y - resizeStart.value.y
+    
+    let newWidth = initialSize.value.width
+    let newHeight = initialSize.value.height
+    let newX = initialPosition.value.x
+    let newY = initialPosition.value.y
+
+    switch (resizeHandle.value) {
+      case 'se':
+        newWidth = initialSize.value.width + deltaX
+        newHeight = initialSize.value.height + deltaY
+        break
+      case 'sw':
+        newWidth = initialSize.value.width - deltaX
+        newHeight = initialSize.value.height + deltaY
+        newX = initialPosition.value.x + deltaX
+        break
+      case 'ne':
+        newWidth = initialSize.value.width + deltaX
+        newHeight = initialSize.value.height - deltaY
+        newY = initialPosition.value.y + deltaY
+        break
+      case 'nw':
+        newWidth = initialSize.value.width - deltaX
+        newHeight = initialSize.value.height - deltaY
+        newX = initialPosition.value.x + deltaX
+        newY = initialPosition.value.y + deltaY
+        break
+      case 'e':
+        newWidth = initialSize.value.width + deltaX
+        break
+      case 'w':
+        newWidth = initialSize.value.width - deltaX
+        newX = initialPosition.value.x + deltaX
+        break
+      case 'n':
+        newHeight = initialSize.value.height - deltaY
+        newY = initialPosition.value.y + deltaY
+        break
+      case 's':
+        newHeight = initialSize.value.height + deltaY
+        break
+    }
+    
+    const minSize = 100
+    newWidth = Math.max(minSize, newWidth)
+    newHeight = Math.max(minSize, newHeight)
+    
+    resizedArtboard.value.size = { width: newWidth, height: newHeight }
+    resizedArtboard.value.position = { x: newX, y: newY }
+  }
+
   return {
     isDragging: computed(() => isDragging.value),
-    isDraggingGroup: computed(() => isDraggingGroup.value),
+    isDraggingArtboard: computed(() => isDraggingArtboard.value),
     isResizing: computed(() => isResizing.value),
+    isResizingArtboard: computed(() => isResizingArtboard.value),
     resizeHandle: computed(() => resizeHandle.value),
     startDrag,
     updateDrag,
     endDrag,
-    startDragGroup,
-    updateDragGroup,
+    startDragArtboard,
+    updateDragArtboard,
     getResizeHandle,
     startResize,
     updateResize,
     endResize,
+    startResizeArtboard,
+    updateResizeArtboard,
     getCursor
   }
 }
