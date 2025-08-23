@@ -1,15 +1,5 @@
-# garden
+# Vue 3 + TypeScript + Vite
 
-PureRef ライクなイメージリファレンス・ムードボード作成ツールです。
+This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
 
-## 機能
-
-- SPA
-- 無限キャンバス（パン・ズーム可能）
-- 画像をローカル・クリップボードから追加できます
-- 画像をドラッグ・リサイズできます
-- クリックすると選択状態（delete で削除）
-- 矩形選択
-- プロジェクトの保存・読み込み（tar.gz形式）
-  - 画像とレイアウト情報（JSON）をパッケージング
-  - ローカルファイルとして保存・読み込み
+Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
