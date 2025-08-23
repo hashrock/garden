@@ -37,7 +37,7 @@ export function useInputMode() {
   const getModeDescription = (mode: InputMode) => {
     if (mode === 'mouse') {
       return {
-        pan: 'マウス中ボタンドラッグ or Alt+ドラッグ',
+        pan: '右クリックドラッグ / 中ボタンドラッグ / Alt+ドラッグ',
         zoom: 'マウスホイール',
         select: 'クリック',
         multiSelect: 'Ctrl/Cmd+クリック',
@@ -45,8 +45,8 @@ export function useInputMode() {
       }
     } else {
       return {
-        pan: '2本指スワイプ or スペース+ドラッグ',
-        zoom: '2本指ピンチ or Ctrl+スクロール',
+        pan: '2本指スワイプ / 右クリックドラッグ / スペース+ドラッグ',
+        zoom: '2本指ピンチ',
         select: 'クリック',
         multiSelect: 'Ctrl/Cmd+クリック',
         description: 'トラックパッド・タッチ操作に最適化'
@@ -62,8 +62,9 @@ export function useInputMode() {
   const getInputConfig = () => {
     if (currentMode.value === 'mouse') {
       return {
-        // マウスモード: 中ボタンまたはAlt+左ボタンでパン
+        // マウスモード: 中ボタンまたはAlt+左ボタン、右ボタンでパン
         enableMiddleButtonPan: true,
+        enableRightButtonPan: true,
         enableAltPan: true,
         enableSpacePan: false,
         enableTwoFingerPan: false,
@@ -75,14 +76,15 @@ export function useInputMode() {
       }
     } else {
       return {
-        // トラックパッドモード: スペース+ドラッグでパン
-        enableMiddleButtonPan: false,
+        // トラックパッドモード: スペース+ドラッグ、右ボタン、中ボタンでパン
+        enableMiddleButtonPan: true,
+        enableRightButtonPan: true,
         enableAltPan: false,
         enableSpacePan: true,
-        enableTwoFingerPan: true,
-        // Ctrl+ホイールでズーム（トラックパッドのピンチ）
-        enableWheelZoom: false,
-        enableCtrlWheelZoom: true,
+        enableTwoFingerPan: true,  // 2本指スワイプでパン
+        // ホイールでズーム
+        enableWheelZoom: false,  // 通常のホイールはパンに使用
+        enableCtrlWheelZoom: true,  // Ctrl+ホイール（ピンチ）でズーム
         // タッチジェスチャーを有効
         enableTouchGestures: true
       }

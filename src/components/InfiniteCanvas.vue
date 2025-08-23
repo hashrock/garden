@@ -30,6 +30,7 @@
       @pointerup="handlePointerUp"
       @pointercancel="handlePointerCancel"
       @wheel="handleWheel"
+      @contextmenu.prevent
       @dragover.prevent
       @drop="handleDrop"
       style="touch-action: none"
@@ -105,6 +106,7 @@ const handlePointerDown = (e: PointerEvent) => {
   // パン操作の判定
   const shouldPan = 
     (config.enableMiddleButtonPan && e.button === 1) ||
+    (config.enableRightButtonPan && e.button === 2) ||
     (config.enableAltPan && e.button === 0 && e.altKey) ||
     (config.enableSpacePan && e.button === 0 && isSpacePressed.value)
   
@@ -268,8 +270,8 @@ const handleWheel = (e: WheelEvent) => {
   const offsetX = e.clientX - rect.left
   const offsetY = e.clientY - rect.top
   
-  // トラックパッドモード: Ctrl+ホイールでズーム
-  if (config.enableCtrlWheelZoom && e.ctrlKey) {
+  // Ctrl+ホイールでピンチズーム（トラックパッドのピンチジェスチャー）
+  if (e.ctrlKey && config.enableCtrlWheelZoom) {
     const pinchData = touch.handleTrackpadPinch(e)
     if (pinchData) {
       const currentZoom = viewport.value.zoom
@@ -281,14 +283,15 @@ const handleWheel = (e: WheelEvent) => {
       viewport.value.x = offsetX - (offsetX - viewport.value.x) * scale
       viewport.value.y = offsetY - (offsetY - viewport.value.y) * scale
     }
-  } 
-  // マウスモード: ホイールでズーム（Ctrlなし）
-  else if (config.enableWheelZoom && !e.ctrlKey) {
+  }
+  // マウスモード: 通常のホイールでズーム
+  else if (!e.ctrlKey && config.enableWheelZoom) {
     const delta = e.deltaY > 0 ? -1 : 1
     zoom(delta, offsetX, offsetY)
   }
-  // トラックパッドモードで2本指スクロール（パン）
-  else if (config.enableTwoFingerPan && !e.ctrlKey) {
+  // トラックパッドモード: 2本指スワイプでパン
+  else if (!e.ctrlKey && config.enableTwoFingerPan) {
+    // deltaX/deltaYでパン操作
     viewport.value.x -= e.deltaX
     viewport.value.y -= e.deltaY
   }
