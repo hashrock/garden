@@ -33,6 +33,7 @@
       @pointercancel="handlePointerCancel"
       @wheel="handleWheel"
       @contextmenu="handleContextMenu"
+      @dblclick="handleDoubleClick"
       @dragover.prevent
       @drop="handleDrop"
       style="touch-action: none"
@@ -77,6 +78,16 @@
       @paste="handlePaste"
       @delete="handleDeleteFromContext"
       @createArtboard="handleCreateArtboard"
+      @editDescription="handleEditDescription"
+    />
+    
+    <!-- Image Text Editor -->
+    <ImageTextEditor
+      v-if="editingImage"
+      :editingImage="editingImage"
+      :position="textEditorPosition"
+      @save="handleSaveImageText"
+      @close="editingImage = null"
     />
   </div>
 </template>
@@ -85,6 +96,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import FloatingToolbar from './FloatingToolbar.vue'
 import ContextMenu from './ContextMenu.vue'
+import ImageTextEditor from './ImageTextEditor.vue'
 import { useCanvas } from '../composables/useCanvas'
 import { useImageManager } from '../composables/useImageManager'
 import { useSelection } from '../composables/useSelection'
@@ -101,6 +113,9 @@ const canvasHeight = ref(window.innerHeight)
 
 const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
+
+const editingImage = ref<ImageItem | null>(null)
+const textEditorPosition = ref({ x: 0, y: 0 })
 
 const canvas = useCanvas(canvasRef)
 const imageManager = useImageManager()
@@ -586,6 +601,68 @@ const handleAddImageFromEmpty = () => {
   input.click()
 }
 
+const handleSaveImageText = (title: string, description: string) => {
+  if (editingImage.value) {
+    editingImage.value.title = title
+    editingImage.value.description = description
+    editingImage.value.showText = title || description ? true : false
+    editingImage.value = null
+  }
+}
+
+const handleDoubleClick = (e: MouseEvent) => {
+  if (!canvasRef.value) return
+  
+  const rect = canvasRef.value.getBoundingClientRect()
+  const screenPoint = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+  const canvasPoint = screenToCanvas(screenPoint.x, screenPoint.y)
+  
+  const clickedImage = getImageAt(canvasPoint)
+  
+  if (clickedImage) {
+    // Select the image first
+    selectImage(clickedImage.id, false)
+    
+    // Calculate position for text editor (below the image)
+    const screenX = clickedImage.position.x * viewport.value.zoom + viewport.value.x + rect.left
+    const screenY = (clickedImage.position.y + clickedImage.size.height + 10) * viewport.value.zoom + viewport.value.y + rect.top
+    
+    textEditorPosition.value = {
+      x: screenX,
+      y: screenY
+    }
+    
+    editingImage.value = clickedImage
+    clickedImage.showText = true
+  }
+}
+
+const handleEditDescription = () => {
+  showContextMenu.value = false
+  
+  if (selectedImageIds.value.size === 1) {
+    const imageId = Array.from(selectedImageIds.value)[0]
+    const image = images.value.find(img => img.id === imageId)
+    
+    if (image) {
+      // Calculate position for text editor (below the image)
+      const rect = canvasRef.value?.getBoundingClientRect()
+      if (!rect) return
+      
+      const screenX = image.position.x * viewport.value.zoom + viewport.value.x + rect.left
+      const screenY = (image.position.y + image.size.height + 10) * viewport.value.zoom + viewport.value.y + rect.top
+      
+      textEditorPosition.value = {
+        x: screenX,
+        y: screenY
+      }
+      
+      editingImage.value = image
+      image.showText = true
+    }
+  }
+}
+
 
 const handleCreateArtboard = () => {
   showContextMenu.value = false
@@ -771,6 +848,85 @@ const draw = () => {
         image.size.width,
         image.size.height
       )
+      
+      // Draw text if showText is true
+      if (image.showText && (image.title || image.description)) {
+        ctx.save()
+        
+        // Background for text
+        const textY = image.position.y + image.size.height + (5 / viewport.value.zoom)
+        const padding = 8 / viewport.value.zoom
+        const lineHeight = 16 / viewport.value.zoom
+        const titleHeight = image.title ? lineHeight : 0
+        const descHeight = image.description ? lineHeight * Math.min(3, Math.ceil(image.description.length / 40)) : 0
+        const textHeight = titleHeight + descHeight + padding * 2
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+        ctx.fillRect(
+          image.position.x,
+          textY,
+          image.size.width,
+          textHeight
+        )
+        
+        // Border for text box
+        ctx.strokeStyle = '#e5e7eb'
+        ctx.lineWidth = 1 / viewport.value.zoom
+        ctx.strokeRect(
+          image.position.x,
+          textY,
+          image.size.width,
+          textHeight
+        )
+        
+        // Draw title
+        if (image.title) {
+          ctx.fillStyle = '#111827'
+          ctx.font = `bold ${14 / viewport.value.zoom}px sans-serif`
+          ctx.textBaseline = 'top'
+          ctx.fillText(
+            image.title,
+            image.position.x + padding,
+            textY + padding,
+            image.size.width - padding * 2
+          )
+        }
+        
+        // Draw description
+        if (image.description) {
+          ctx.fillStyle = '#6b7280'
+          ctx.font = `${12 / viewport.value.zoom}px sans-serif`
+          ctx.textBaseline = 'top'
+          const descY = textY + padding + (image.title ? lineHeight : 0)
+          
+          // Word wrap for description
+          const words = image.description.split(' ')
+          let line = ''
+          let y = descY
+          const maxLines = 3 // Limit to 3 lines for better display
+          let linesDrawn = 0
+          
+          for (let n = 0; n < words.length && linesDrawn < maxLines; n++) {
+            const testLine = line + words[n] + ' '
+            const metrics = ctx.measureText(testLine)
+            const testWidth = metrics.width
+            
+            if (testWidth > image.size.width - padding * 2 && n > 0) {
+              ctx.fillText(line, image.position.x + padding, y)
+              line = words[n] + ' '
+              y += lineHeight
+              linesDrawn++
+            } else {
+              line = testLine
+            }
+          }
+          if (line && linesDrawn < maxLines) {
+            ctx.fillText(line, image.position.x + padding, y)
+          }
+        }
+        
+        ctx.restore()
+      }
       
       // 選択状態の描画
       if (selectedImageIds.value.has(image.id)) {

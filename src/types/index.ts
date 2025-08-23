@@ -39,6 +39,9 @@ export interface ImageItem {
   selected?: boolean
   artboardId?: string
   groupId?: string
+  title?: string
+  description?: string
+  showText?: boolean
 }
 
 export interface ProjectMetadata {
