@@ -64,7 +64,7 @@ import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
 import { useArtboardManager } from '../composables/useArtboardManager'
-import type { Point, ImageItem, Artboard } from '../types'
+import type { Point, ImageItem, ResizeHandle } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const headerHeight = 48
@@ -86,8 +86,8 @@ const animationFrameId = ref<number | null>(null)
 const { isPanning, viewport, screenToCanvas, startPan, updatePan, endPan, zoom, resetViewport } = canvas
 const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clearSelection, toggleImageSelection, removeSelectedImages, selectAll, clearAllImages, addImage } = imageManager
 const { isSelecting, selectionRect, startSelection, updateSelection, endSelection } = selection
-const { isDragging, isDraggingArtboard, isResizing, isResizingArtboard, startDrag, updateDrag, endDrag, startDragArtboard, updateDragArtboard, getResizeHandle, startResize, updateResize, endResize, startResizeArtboard, updateResizeArtboard, getCursor } = dragResize
-const { artboards, selectedArtboardIds, getArtboardAt, getArtboardNameAt, selectArtboard, clearArtboardSelection, createArtboardFromSelection, removeItemsFromArtboard, moveArtboardChildren, autoResizeArtboard, createArtboard } = artboardManager
+const { isDragging, isDraggingArtboard, isResizing, isResizingArtboard, startDrag, updateDrag, endDrag, updateDragArtboard, getResizeHandle, startResize, updateResize, endResize, startResizeArtboard, updateResizeArtboard, getCursor } = dragResize
+const { artboards, selectedArtboardIds, getArtboardAt, selectArtboard, clearArtboardSelection, autoResizeArtboard, createArtboard } = artboardManager
 
 const handlePointerDown = (e: PointerEvent) => {
   if (!canvasRef.value) return
@@ -133,7 +133,7 @@ const handlePointerDown = (e: PointerEvent) => {
     if (clickedArtboard && selectedArtboardIds.value.has(clickedArtboard.id)) {
       const handle = artboardManager.getResizeHandle(clickedArtboard, canvasPoint, 20)
       if (handle) {
-        startResizeArtboard(clickedArtboard, handle, canvasPoint)
+        startResizeArtboard(clickedArtboard, handle as ResizeHandle, canvasPoint)
         return
       }
     }
@@ -240,7 +240,7 @@ const handlePointerMove = (e: PointerEvent) => {
       targetArtboard.isDropTarget = true
     }
   } else if (isResizingArtboard.value) {
-    updateResizeArtboard(canvasPoint, e.shiftKey)
+    updateResizeArtboard(canvasPoint)
   } else if (isResizing.value) {
     updateResize(canvasPoint, e.shiftKey)
   } else if (isSelecting.value) {
@@ -251,7 +251,7 @@ const handlePointerMove = (e: PointerEvent) => {
     if (hoveredArtboard && selectedArtboardIds.value.has(hoveredArtboard.id)) {
       const artboardHandle = artboardManager.getResizeHandle(hoveredArtboard, canvasPoint, 20)
       if (artboardHandle && canvasRef.value) {
-        canvasRef.value.style.cursor = getCursor(artboardHandle)
+        canvasRef.value.style.cursor = getCursor(artboardHandle as ResizeHandle)
         return
       }
     }
@@ -486,7 +486,9 @@ const handleLoadProject = (loadedImages: ImageItem[], loadedViewport: any) => {
     images.value.push(img)
   })
   if (loadedViewport) {
-    canvas.viewport.value = loadedViewport
+    viewport.value.x = loadedViewport.x
+    viewport.value.y = loadedViewport.y
+    viewport.value.zoom = loadedViewport.zoom
   }
 }
 
@@ -514,7 +516,7 @@ const handleCreateArtboard = () => {
 
 const handleDeleteArtboard = () => {
   selectedArtboardIds.value.forEach(artboardId => {
-    removeItemsFromArtboard(artboardId, images.value)
+    artboardManager.removeItemsFromArtboard(artboardId, images.value)
   })
   clearArtboardSelection()
 }

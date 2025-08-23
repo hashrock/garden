@@ -1,5 +1,18 @@
-import { ref, computed } from 'vue'
-import type { Group, ImageItem, Point, Size } from '../types'
+import { ref } from 'vue'
+import type { ImageItem, Point, Size } from '../types'
+
+interface Group {
+  id: string
+  name: string
+  position: Point
+  size: Size
+  children: string[]
+  zIndex: number
+  selected?: boolean
+  expanded?: boolean
+  backgroundColor?: string
+  borderColor?: string
+}
 
 export function useGroupManager() {
   const groups = ref<Group[]>([])
@@ -12,7 +25,7 @@ export function useGroupManager() {
       position,
       size,
       children: [],
-      zIndex: Math.max(...groups.value.map(g => g.zIndex), 0) + 1,
+      zIndex: Math.max(...groups.value.map((g: any) => g.zIndex), 0) + 1,
       selected: false,
       expanded: true,
       backgroundColor: 'rgba(240, 240, 240, 0.5)',
@@ -23,7 +36,7 @@ export function useGroupManager() {
   }
 
   const addToGroup = (groupId: string, itemIds: string[]) => {
-    const group = groups.value.find(g => g.id === groupId)
+    const group = groups.value.find((g: any) => g.id === groupId)
     if (group) {
       itemIds.forEach(id => {
         if (!group.children.includes(id)) {
@@ -34,14 +47,14 @@ export function useGroupManager() {
   }
 
   const removeFromGroup = (groupId: string, itemIds: string[]) => {
-    const group = groups.value.find(g => g.id === groupId)
+    const group = groups.value.find((g: any) => g.id === groupId)
     if (group) {
       group.children = group.children.filter(id => !itemIds.includes(id))
     }
   }
 
   const deleteGroup = (groupId: string) => {
-    const index = groups.value.findIndex(g => g.id === groupId)
+    const index = groups.value.findIndex((g: any) => g.id === groupId)
     if (index !== -1) {
       groups.value.splice(index, 1)
       selectedGroupIds.value.delete(groupId)
@@ -64,28 +77,28 @@ export function useGroupManager() {
   }
 
   const toggleGroupExpanded = (groupId: string) => {
-    const group = groups.value.find(g => g.id === groupId)
+    const group = groups.value.find((g: any) => g.id === groupId)
     if (group) {
       group.expanded = !group.expanded
     }
   }
 
   const updateGroupPosition = (groupId: string, position: Point) => {
-    const group = groups.value.find(g => g.id === groupId)
+    const group = groups.value.find((g: any) => g.id === groupId)
     if (group) {
       group.position = position
     }
   }
 
   const updateGroupSize = (groupId: string, size: Size) => {
-    const group = groups.value.find(g => g.id === groupId)
+    const group = groups.value.find((g: any) => g.id === groupId)
     if (group) {
       group.size = size
     }
   }
 
   const getGroupAt = (point: Point): Group | null => {
-    const sortedGroups = [...groups.value].sort((a, b) => b.zIndex - a.zIndex)
+    const sortedGroups = [...groups.value].sort((a: any, b: any) => b.zIndex - a.zIndex)
     
     for (const group of sortedGroups) {
       if (
@@ -101,7 +114,7 @@ export function useGroupManager() {
   }
 
   const getGroupsInRect = (x: number, y: number, width: number, height: number): Group[] => {
-    return groups.value.filter(group => {
+    return groups.value.filter((group: any) => {
       const groupRight = group.position.x + group.size.width
       const groupBottom = group.position.y + group.size.height
       const rectRight = x + width
@@ -134,20 +147,20 @@ export function useGroupManager() {
     addToGroup(group.id, selectedImages.map(img => img.id))
     
     selectedImages.forEach(img => {
-      img.groupId = group.id
+      (img as any).groupId = group.id
     })
 
     return group
   }
 
   const ungroupItems = (groupId: string, images: ImageItem[]) => {
-    const group = groups.value.find(g => g.id === groupId)
+    const group = groups.value.find((g: any) => g.id === groupId)
     if (!group) return
 
     group.children.forEach(childId => {
       const image = images.find(img => img.id === childId)
       if (image) {
-        delete image.groupId
+        delete (image as any).groupId
       }
     })
 

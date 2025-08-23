@@ -1,7 +1,5 @@
-import { ref, computed } from 'vue'
-import type { Point, Size, ImageItem, Artboard } from '../types'
-
-type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | null
+import { ref } from 'vue'
+import type { Point, Size, ImageItem, Artboard, ResizeHandle } from '../types'
 
 export function useDragResize() {
   const isDragging = ref(false)
@@ -16,7 +14,7 @@ export function useDragResize() {
   const initialPositions = ref<Map<string, Point>>(new Map())
   const initialArtboardPositions = ref<Map<string, Point>>(new Map())
   
-  const resizeHandle = ref<ResizeHandle>(null)
+  const resizeHandle = ref<ResizeHandle | null>(null)
   const resizeStart = ref<Point | null>(null)
   const resizedImage = ref<ImageItem | null>(null)
   const resizedArtboard = ref<Artboard | null>(null)
@@ -105,7 +103,7 @@ export function useDragResize() {
     })
   }
 
-  const getResizeHandle = (image: ImageItem, point: Point, handleSize: number = 10): ResizeHandle => {
+  const getResizeHandle = (image: ImageItem, point: Point, handleSize: number = 10): ResizeHandle | null => {
     const { position, size } = image
     const threshold = handleSize
     
@@ -248,7 +246,7 @@ export function useDragResize() {
     initialPosition.value = { ...artboard.position }
   }
 
-  const updateResizeArtboard = (currentPoint: Point, maintainAspectRatio: boolean = false) => {
+  const updateResizeArtboard = (currentPoint: Point) => {
     if (!isResizingArtboard.value || !resizeStart.value || !resizedArtboard.value || 
         !initialSize.value || !initialPosition.value || !resizeHandle.value) return
 
@@ -306,11 +304,11 @@ export function useDragResize() {
   }
 
   return {
-    isDragging: computed(() => isDragging.value),
-    isDraggingArtboard: computed(() => isDraggingArtboard.value),
-    isResizing: computed(() => isResizing.value),
-    isResizingArtboard: computed(() => isResizingArtboard.value),
-    resizeHandle: computed(() => resizeHandle.value),
+    isDragging,
+    isDraggingArtboard,
+    isResizing,
+    isResizingArtboard,
+    resizeHandle,
     startDrag,
     updateDrag,
     endDrag,

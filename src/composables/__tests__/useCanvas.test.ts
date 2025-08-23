@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { useCanvas } from '../useCanvas'
 
 describe('useCanvas', () => {
-  let canvasRef: ReturnType<typeof ref<HTMLCanvasElement | null>>
+  let canvasRef: Ref<HTMLCanvasElement | null>
   let canvas: ReturnType<typeof useCanvas>
 
   beforeEach(() => {
@@ -11,7 +11,7 @@ describe('useCanvas', () => {
       width: 800,
       height: 600
     } as HTMLCanvasElement
-    canvasRef = ref(mockCanvas)
+    canvasRef = ref(mockCanvas) as Ref<HTMLCanvasElement | null>
     canvas = useCanvas(canvasRef)
   })
 

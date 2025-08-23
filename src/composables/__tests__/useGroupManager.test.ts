@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useGroupManager } from '../useGroupManager'
-import type { ImageItem, Group } from '../../types'
+import type { ImageItem } from '../../types'
 
 describe('useGroupManager', () => {
   let groupManager: ReturnType<typeof useGroupManager>
@@ -141,7 +141,7 @@ describe('useGroupManager', () => {
     })
 
     it('重なっているグループの場合、zIndexが大きい方を返す', () => {
-      const group1 = groupManager.createGroup('Group 1', { x: 100, y: 100 }, { width: 200, height: 150 })
+      groupManager.createGroup('Group 1', { x: 100, y: 100 }, { width: 200, height: 150 })
       const group2 = groupManager.createGroup('Group 2', { x: 150, y: 150 }, { width: 200, height: 150 })
       
       const foundGroup = groupManager.getGroupAt({ x: 180, y: 180 })

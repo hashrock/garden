@@ -38,6 +38,7 @@ export interface ImageItem {
   zIndex: number
   selected?: boolean
   artboardId?: string
+  groupId?: string
 }
 
 export interface ProjectMetadata {
@@ -51,6 +52,18 @@ export interface CanvasState {
   height: number
   viewport: Viewport
 }
+
+export interface Group {
+  id: string
+  name: string
+  children: string[]
+  position: Point
+  size: Size
+  zIndex: number
+  selected?: boolean
+}
+
+export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
 export interface ProjectData {
   version: string
