@@ -22,30 +22,21 @@ export function useArtboardManager(onArtboardChildrenChange?: (artboardId: strin
   }
 
   const addToArtboard = (artboardId: string, itemIds: string[]) => {
-    console.log(`[ArtboardManager] Adding items to artboard ${artboardId}:`, itemIds)
     const artboard = artboards.value.find(a => a.id === artboardId)
     if (artboard) {
-      console.log(`[ArtboardManager] Found artboard, current children:`, artboard.children)
       const newChildren = [...artboard.children]
       itemIds.forEach(id => {
         if (!newChildren.includes(id)) {
           newChildren.push(id)
-          console.log(`[ArtboardManager] Added ${id} to artboard`)
-        } else {
-          console.log(`[ArtboardManager] ${id} already in artboard`)
         }
       })
       // Replace the array to trigger Vue reactivity
       artboard.children = newChildren
-      console.log(`[ArtboardManager] Updated children:`, artboard.children)
       
       // Trigger color update callback if provided
       if (onArtboardChildrenChange) {
-        console.log(`[ArtboardManager] Triggering color update for artboard ${artboardId}`)
         onArtboardChildrenChange(artboardId)
       }
-    } else {
-      console.log(`[ArtboardManager] Artboard not found: ${artboardId}`)
     }
   }
 
@@ -57,7 +48,6 @@ export function useArtboardManager(onArtboardChildrenChange?: (artboardId: strin
       
       // Trigger color update callback if provided
       if (onArtboardChildrenChange) {
-        console.log(`[ArtboardManager] Triggering color update for artboard ${artboardId} after removal`)
         onArtboardChildrenChange(artboardId)
       }
     }

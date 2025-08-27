@@ -60,7 +60,6 @@ export function useImageManager(
             const targetArtboard = getArtboardAt(imageCenterPoint)
             if (targetArtboard) {
               imageItem.artboardId = targetArtboard.id
-              console.log(`[ImageManager] Image ${imageItem.id} auto-assigned to artboard ${targetArtboard.id}`)
               // Add to artboard's children array after image is in the list
               if (addToArtboard) {
                 addToArtboard(targetArtboard.id, [imageItem.id])
@@ -125,7 +124,6 @@ export function useImageManager(
           const targetArtboard = getArtboardAt(imageCenterPoint)
           if (targetArtboard) {
             imageItem.artboardId = targetArtboard.id
-            console.log(`[ImageManager] Image ${imageItem.id} auto-assigned to artboard ${targetArtboard.id}`)
             // Add to artboard's children array after image is in the list
             if (addToArtboard) {
               addToArtboard(targetArtboard.id, [imageItem.id])

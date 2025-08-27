@@ -49,22 +49,10 @@ export function useArtboardColorManager(
 
   // Find the largest image in an artboard
   const findLargestImage = (artboard: Artboard): ImageItem | null => {
-    console.log(`[ColorManager] Finding largest image in artboard ${artboard.id}`)
-    console.log(`[ColorManager] Artboard children: ${artboard.children.length}`, artboard.children)
-    console.log(`[ColorManager] Total images in system: ${images.value.length}`)
-    
-    // Log all images with their IDs and artboardIds
-    images.value.forEach(img => {
-      console.log(`[ColorManager] Image ${img.id}: artboardId=${img.artboardId}, in children=${artboard.children.includes(img.id)}`)
-    })
-    
     // Check both methods: children array and artboardId
     const artboardImages = images.value.filter(img => 
       artboard.children.includes(img.id) || img.artboardId === artboard.id
     )
-    
-    console.log(`[ColorManager] Images with artboardId: ${images.value.filter(img => img.artboardId === artboard.id).length}`)
-    console.log(`[ColorManager] Found ${artboardImages.length} images in artboard`)
     
     if (artboardImages.length === 0) return null
     
@@ -77,30 +65,19 @@ export function useArtboardColorManager(
 
   // Update artboard colors based on largest image
   const updateArtboardColors = async (artboardId: string) => {
-    console.log(`[ColorManager] Updating colors for artboard: ${artboardId}`)
-    
     const artboard = artboards.value.find(a => a.id === artboardId)
     if (!artboard) {
-      console.log(`[ColorManager] Artboard not found: ${artboardId}`)
       return
     }
 
-    console.log(`[ColorManager] Artboard children:`, artboard.children)
     const largestImage = findLargestImage(artboard)
     
     if (!largestImage) {
-      console.log(`[ColorManager] No images found in artboard, resetting to default colors`)
       // Reset to default colors if no images
       artboard.backgroundColor = 'rgba(255, 255, 255, 1)'
       artboard.textColor = '#000000'
       return
     }
-
-    console.log(`[ColorManager] Largest image found:`, {
-      id: largestImage.id,
-      size: largestImage.size,
-      area: largestImage.size.width * largestImage.size.height
-    })
 
     // Extract primary color from the largest image
     const color = await extractColorFromImage(largestImage.dataUrl)
@@ -110,28 +87,17 @@ export function useArtboardColorManager(
       const newBgColor = `rgba(${r}, ${g}, ${b}, 1)`
       const newTextColor = getTextColor(r, g, b)
       
-      console.log(`[ColorManager] Extracted color RGB(${r}, ${g}, ${b})`)
-      console.log(`[ColorManager] Setting backgroundColor: ${newBgColor}`)
-      console.log(`[ColorManager] Setting textColor: ${newTextColor}`)
-      
       artboard.backgroundColor = newBgColor
       artboard.textColor = newTextColor
     } else {
-      console.log(`[ColorManager] Failed to extract color, using defaults`)
       // Fallback to default colors
       artboard.backgroundColor = 'rgba(255, 255, 255, 1)'
       artboard.textColor = '#000000'
     }
-    
-    console.log(`[ColorManager] Final artboard colors:`, {
-      backgroundColor: artboard.backgroundColor,
-      textColor: artboard.textColor
-    })
   }
 
   // Update all artboards
   const updateAllArtboardColors = async () => {
-    console.log(`[ColorManager] Updating all ${artboards.value.length} artboards`)
     const updatePromises = artboards.value.map(artboard => 
       updateArtboardColors(artboard.id)
     )
@@ -142,11 +108,7 @@ export function useArtboardColorManager(
   watch(
     images,
     async (newImages, oldImages) => {
-      console.log('[ColorManager] Images changed, checking for updates')
-      console.log(`[ColorManager] New images count: ${newImages.length}, Old images count: ${oldImages ? oldImages.length : 0}`)
-      
       if (!oldImages) {
-        console.log('[ColorManager] Initial load, updating all artboards')
         // Initial load, update all artboards
         await updateAllArtboardColors()
         return
@@ -158,13 +120,9 @@ export function useArtboardColorManager(
       const newIds = new Set(newImages.map(img => img.id))
       const oldIds = new Set(oldImages.map(img => img.id))
       
-      console.log(`[ColorManager] New image IDs:`, Array.from(newIds))
-      console.log(`[ColorManager] Old image IDs:`, Array.from(oldIds))
-      
       // Find removed images
       oldImages.forEach(img => {
         if (!newIds.has(img.id) && img.artboardId) {
-          console.log(`[ColorManager] Image removed from artboard: ${img.id} from ${img.artboardId}`)
           affectedArtboards.add(img.artboardId)
         }
       })
@@ -175,9 +133,7 @@ export function useArtboardColorManager(
         
         if (!oldImg) {
           // New image added
-          console.log(`[ColorManager] New image detected: ${newImg.id}, artboardId: ${newImg.artboardId}`)
           if (newImg.artboardId) {
-            console.log(`[ColorManager] New image added to artboard: ${newImg.id} to ${newImg.artboardId}`)
             affectedArtboards.add(newImg.artboardId)
           }
         } else {
@@ -187,11 +143,6 @@ export function useArtboardColorManager(
             newImg.size.width !== oldImg.size.width ||
             newImg.size.height !== oldImg.size.height
           ) {
-            console.log(`[ColorManager] Image modified: ${newImg.id}`, {
-              oldArtboard: oldImg.artboardId,
-              newArtboard: newImg.artboardId,
-              sizeChanged: newImg.size.width !== oldImg.size.width || newImg.size.height !== oldImg.size.height
-            })
             if (newImg.artboardId) affectedArtboards.add(newImg.artboardId)
             if (oldImg.artboardId && oldImg.artboardId !== newImg.artboardId) {
               affectedArtboards.add(oldImg.artboardId)
@@ -200,7 +151,6 @@ export function useArtboardColorManager(
         }
       })
 
-      console.log(`[ColorManager] Affected artboards:`, Array.from(affectedArtboards))
       // Update affected artboards
       const updatePromises = Array.from(affectedArtboards).map(artboardId =>
         updateArtboardColors(artboardId)
@@ -214,17 +164,11 @@ export function useArtboardColorManager(
   watch(
     artboards,
     async (newArtboards, oldArtboards) => {
-      console.log('[ColorManager] Artboards changed, checking for updates')
-      console.log('[ColorManager] New artboards count:', newArtboards.length)
-      
       if (!oldArtboards) {
-        console.log('[ColorManager] Initial artboards load, updating all')
         // Initial load, update all artboards
         await updateAllArtboardColors()
         return
       }
-      
-      console.log('[ColorManager] Old artboards count:', oldArtboards.length)
 
       const affectedArtboards = new Set<string>()
 
@@ -232,10 +176,6 @@ export function useArtboardColorManager(
         const oldArtboard = oldArtboards.find(a => a.id === newArtboard.id)
         
         if (!oldArtboard) {
-          console.log(`[ColorManager] New artboard created: ${newArtboard.id}`, {
-            children: newArtboard.children,
-            childrenCount: newArtboard.children.length
-          })
           // New artboard
           affectedArtboards.add(newArtboard.id)
         } else {
@@ -244,12 +184,6 @@ export function useArtboardColorManager(
           const newChildrenStr = JSON.stringify(newArtboard.children || [])
           
           if (oldChildrenStr !== newChildrenStr) {
-            console.log(`[ColorManager] Artboard children changed: ${newArtboard.id}`, {
-              oldChildren: oldArtboard.children,
-              newChildren: newArtboard.children,
-              oldCount: oldArtboard.children.length,
-              newCount: newArtboard.children.length
-            })
             // Children changed - need to update colors
             affectedArtboards.add(newArtboard.id)
           } else {
@@ -264,15 +198,10 @@ export function useArtboardColorManager(
             if (newArtboard.size?.width !== oldArtboard.size?.width || newArtboard.size?.height !== oldArtboard.size?.height) {
               propsChanged.push('size')
             }
-            
-            if (propsChanged.length > 0) {
-              console.log(`[ColorManager] Artboard ${newArtboard.id} properties changed:`, propsChanged)
-            }
           }
         }
       })
 
-      console.log(`[ColorManager] Affected artboards from artboard watch:`, Array.from(affectedArtboards))
       // Update affected artboards
       const updatePromises = Array.from(affectedArtboards).map(artboardId =>
         updateArtboardColors(artboardId)
@@ -283,24 +212,6 @@ export function useArtboardColorManager(
   )
 
   // Initial color setup
-  console.log('[ColorManager] Initializing color manager')
-  console.log('[ColorManager] Initial artboards:', artboards.value.length)
-  console.log('[ColorManager] Initial images:', images.value.length)
-  
-  // Check initial state
-  artboards.value.forEach(artboard => {
-    console.log(`[ColorManager] Initial artboard ${artboard.id}:`, {
-      children: artboard.children,
-      childrenCount: artboard.children.length
-    })
-  })
-  
-  images.value.forEach(img => {
-    if (img.artboardId) {
-      console.log(`[ColorManager] Initial image ${img.id} belongs to artboard:`, img.artboardId)
-    }
-  })
-  
   updateAllArtboardColors()
 
   return {

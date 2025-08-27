@@ -574,7 +574,6 @@ const handlePaste = () => {
     }
   }).catch(() => {
     // Fallback: prompt user to use Ctrl+V
-    console.log('Please use Ctrl+V or Cmd+V to paste images')
   })
 }
 
@@ -949,7 +948,6 @@ const handleExportAsHtml = async () => {
     if (artboard) {
       try {
         await exportAsHtmlArchive(artboard, images.value)
-        console.log('HTML gallery exported successfully')
       } catch (error) {
         console.error('Failed to export HTML gallery:', error)
         alert('Failed to export HTML gallery. Please make sure the artboard contains images.')
@@ -975,9 +973,6 @@ const draw = () => {
   for (const artboard of sortedArtboards) {
     // Artboard background
     const bgColor = artboard.backgroundColor || '#ffffff'
-    if (artboard.backgroundColor && artboard.backgroundColor !== 'rgba(255, 255, 255, 1)') {
-      console.log(`[Canvas] Drawing artboard ${artboard.id} with background: ${bgColor}`)
-    }
     ctx.fillStyle = bgColor
     ctx.fillRect(
       artboard.position.x,
