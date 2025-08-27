@@ -4,9 +4,14 @@ import { ref } from 'vue'
 export const useSettingsStore = defineStore('settings', () => {
   const autoScaleImages = ref(true) // Default to enabled
   const maxImageSize = ref(1200) // Maximum size in pixels
+  const showGrid = ref(false) // Default to hidden
   
   const toggleAutoScaleImages = () => {
     autoScaleImages.value = !autoScaleImages.value
+  }
+  
+  const toggleShowGrid = () => {
+    showGrid.value = !showGrid.value
   }
   
   const setMaxImageSize = (size: number) => {
@@ -47,7 +52,9 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     autoScaleImages,
     maxImageSize,
+    showGrid,
     toggleAutoScaleImages,
+    toggleShowGrid,
     setMaxImageSize,
     getScaledDimensions
   }

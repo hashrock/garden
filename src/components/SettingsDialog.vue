@@ -90,6 +90,22 @@
           </div>
         </div>
 
+        <!-- Display Settings -->
+        <div class="mb-6">
+          <h3 class="text-sm font-medium text-gray-700 mb-3">Display</h3>
+          <div class="space-y-3">
+            <label class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg cursor-pointer">
+              <span class="text-sm text-gray-700">Show grid on artboards</span>
+              <input
+                type="checkbox"
+                v-model="showGrid"
+                @change="toggleGrid"
+                class="rounded border-gray-300"
+              />
+            </label>
+          </div>
+        </div>
+
         <!-- Navigation Settings -->
         <div class="mb-6">
           <h3 class="text-sm font-medium text-gray-700 mb-3">Navigation</h3>
@@ -187,6 +203,7 @@ const inputModeManager = useInputMode()
 const settingsStore = useSettingsStore()
 const inputMode = ref('mouse')
 const autoScaleImages = ref(settingsStore.autoScaleImages)
+const showGrid = ref(settingsStore.showGrid)
 const settings = ref({
   enableSpacePan: true,
   enableRightButtonPan: false,
@@ -240,5 +257,9 @@ const updateSettings = () => {
 
 const toggleAutoScale = () => {
   settingsStore.toggleAutoScaleImages()
+}
+
+const toggleGrid = () => {
+  settingsStore.toggleShowGrid()
 }
 </script>

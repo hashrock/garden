@@ -159,7 +159,6 @@ export function useArtboardColorManager(
 
       // Check for added or removed images
       const newIds = new Set(newImages.map(img => img.id))
-      const oldIds = new Set(oldImages.map(img => img.id))
       
       // Find removed images
       oldImages.forEach(img => {

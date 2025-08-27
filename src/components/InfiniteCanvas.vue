@@ -132,6 +132,7 @@ import { useArtboardManager } from '../composables/useArtboardManager'
 import { useArtboardColorManager } from '../composables/useArtboardColorManager'
 import { useHtmlExport } from '../composables/useHtmlExport'
 import { useSkylinePacker } from '../composables/useSkylinePacker'
+import { useSettingsStore } from '../stores/settings'
 import type { Point, ImageItem, ResizeHandle, Viewport, Artboard } from '../types'
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -149,6 +150,7 @@ const showTidySuggestion = ref(false)
 const recentlyAddedImages = ref<ImageItem[]>([])
 
 const canvas = useCanvas(canvasRef)
+const settingsStore = useSettingsStore()
 
 // Initialize artboard color manager first
 let updateArtboardColorsCallback: ((artboardId: string) => void) | undefined
@@ -984,8 +986,8 @@ const draw = () => {
     // Artboard grid (only draw if background is light enough)
     const gridSize = 20
     
-    // Determine if we should draw a grid based on background color
-    let shouldDrawGrid = true
+    // Determine if we should draw a grid based on settings and background color
+    let shouldDrawGrid = settingsStore.showGrid
     let gridColor = 'rgba(0, 0, 0, 0.05)' // Default subtle grid
     
     if (artboard.backgroundColor && artboard.backgroundColor !== 'rgba(255, 255, 255, 1)') {
