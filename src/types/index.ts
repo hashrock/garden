@@ -26,6 +26,7 @@ export interface Artboard {
   textColor?: string
   borderColor?: string
   isDropTarget?: boolean
+  colorKey?: string
 }
 
 export interface ImageItem {

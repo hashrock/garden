@@ -7,6 +7,8 @@ export function useArtboardColorManager(
   images: Ref<ImageItem[]>
 ) {
   const colorThief = new ColorThief()
+  const colorUpdateQueue = new Set<string>()
+  const isUpdating = new Map<string, boolean>()
 
   // Calculate luminance to determine if color is light or dark
   const getLuminance = (r: number, g: number, b: number): number => {
@@ -65,34 +67,55 @@ export function useArtboardColorManager(
 
   // Update artboard colors based on largest image
   const updateArtboardColors = async (artboardId: string) => {
+    // Skip if already updating this artboard
+    if (isUpdating.get(artboardId)) {
+      return
+    }
+    
     const artboard = artboards.value.find(a => a.id === artboardId)
     if (!artboard) {
       return
     }
 
-    const largestImage = findLargestImage(artboard)
+    isUpdating.set(artboardId, true)
     
-    if (!largestImage) {
-      // Reset to default colors if no images
-      artboard.backgroundColor = 'rgba(255, 255, 255, 1)'
-      artboard.textColor = '#000000'
-      return
-    }
-
-    // Extract primary color from the largest image
-    const color = await extractColorFromImage(largestImage.dataUrl)
-    
-    if (color) {
-      const [r, g, b] = color
-      const newBgColor = `rgba(${r}, ${g}, ${b}, 1)`
-      const newTextColor = getTextColor(r, g, b)
+    try {
+      const largestImage = findLargestImage(artboard)
       
-      artboard.backgroundColor = newBgColor
-      artboard.textColor = newTextColor
-    } else {
-      // Fallback to default colors
-      artboard.backgroundColor = 'rgba(255, 255, 255, 1)'
-      artboard.textColor = '#000000'
+      if (!largestImage) {
+        // Reset to default colors if no images
+        artboard.backgroundColor = 'rgba(255, 255, 255, 1)'
+        artboard.textColor = '#000000'
+        return
+      }
+
+      // Skip if colors were already calculated for this image
+      const colorKey = `${largestImage.id}_${largestImage.size.width}_${largestImage.size.height}`
+      const currentColorKey = artboard.colorKey || ''
+      
+      if (currentColorKey === colorKey) {
+        return
+      }
+
+      // Extract primary color from the largest image
+      const color = await extractColorFromImage(largestImage.dataUrl)
+      
+      if (color) {
+        const [r, g, b] = color
+        const newBgColor = `rgba(${r}, ${g}, ${b}, 0.1)`  // 10% opacity for light background
+        const newTextColor = getTextColor(r, g, b)
+        
+        artboard.backgroundColor = newBgColor
+        artboard.textColor = newTextColor
+        artboard.colorKey = colorKey
+      } else {
+        // Fallback to default colors
+        artboard.backgroundColor = 'rgba(255, 255, 255, 1)'
+        artboard.textColor = '#000000'
+        artboard.colorKey = ''
+      }
+    } finally {
+      isUpdating.set(artboardId, false)
     }
   }
 
@@ -104,7 +127,25 @@ export function useArtboardColorManager(
     await Promise.all(updatePromises)
   }
 
-  // Watch for changes in images (size, position, artboard assignment)
+  // Debounced update function
+  let updateTimer: ReturnType<typeof setTimeout> | null = null
+  const scheduleColorUpdate = () => {
+    if (updateTimer) clearTimeout(updateTimer)
+    
+    updateTimer = setTimeout(async () => {
+      if (colorUpdateQueue.size > 0) {
+        const artboardIds = Array.from(colorUpdateQueue)
+        colorUpdateQueue.clear()
+        
+        const updatePromises = artboardIds.map(artboardId =>
+          updateArtboardColors(artboardId)
+        )
+        await Promise.all(updatePromises)
+      }
+    }, 300) // 300ms debounce
+  }
+
+  // Watch for changes in images (only relevant properties)
   watch(
     images,
     async (newImages, oldImages) => {
@@ -137,12 +178,14 @@ export function useArtboardColorManager(
             affectedArtboards.add(newImg.artboardId)
           }
         } else {
-          // Check for changes
-          if (
+          // Only check for relevant changes
+          const relevantChanged = 
             newImg.artboardId !== oldImg.artboardId ||
             newImg.size.width !== oldImg.size.width ||
-            newImg.size.height !== oldImg.size.height
-          ) {
+            newImg.size.height !== oldImg.size.height ||
+            newImg.dataUrl !== oldImg.dataUrl
+          
+          if (relevantChanged) {
             if (newImg.artboardId) affectedArtboards.add(newImg.artboardId)
             if (oldImg.artboardId && oldImg.artboardId !== newImg.artboardId) {
               affectedArtboards.add(oldImg.artboardId)
@@ -151,16 +194,16 @@ export function useArtboardColorManager(
         }
       })
 
-      // Update affected artboards
-      const updatePromises = Array.from(affectedArtboards).map(artboardId =>
-        updateArtboardColors(artboardId)
-      )
-      await Promise.all(updatePromises)
+      // Add to queue and schedule update
+      affectedArtboards.forEach(id => colorUpdateQueue.add(id))
+      if (affectedArtboards.size > 0) {
+        scheduleColorUpdate()
+      }
     },
     { deep: true }
   )
 
-  // Watch for changes in artboard children
+  // Watch for changes in artboard children only
   watch(
     artboards,
     async (newArtboards, oldArtboards) => {
@@ -179,34 +222,23 @@ export function useArtboardColorManager(
           // New artboard
           affectedArtboards.add(newArtboard.id)
         } else {
-          // Check if children changed
+          // Only check if children changed
           const oldChildrenStr = JSON.stringify(oldArtboard.children || [])
           const newChildrenStr = JSON.stringify(newArtboard.children || [])
           
           if (oldChildrenStr !== newChildrenStr) {
             // Children changed - need to update colors
             affectedArtboards.add(newArtboard.id)
-          } else {
-            // Check other properties that might have changed
-            const propsChanged = []
-            if (newArtboard.backgroundColor !== oldArtboard.backgroundColor) {
-              propsChanged.push('backgroundColor')
-            }
-            if (newArtboard.position?.x !== oldArtboard.position?.x || newArtboard.position?.y !== oldArtboard.position?.y) {
-              propsChanged.push('position')
-            }
-            if (newArtboard.size?.width !== oldArtboard.size?.width || newArtboard.size?.height !== oldArtboard.size?.height) {
-              propsChanged.push('size')
-            }
           }
+          // Ignore position, size, and other non-relevant property changes
         }
       })
 
-      // Update affected artboards
-      const updatePromises = Array.from(affectedArtboards).map(artboardId =>
-        updateArtboardColors(artboardId)
-      )
-      await Promise.all(updatePromises)
+      // Add to queue and schedule update
+      affectedArtboards.forEach(id => colorUpdateQueue.add(id))
+      if (affectedArtboards.size > 0) {
+        scheduleColorUpdate()
+      }
     },
     { deep: true }
   )
