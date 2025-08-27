@@ -23,6 +23,7 @@ export interface Artboard {
   zIndex: number
   selected?: boolean
   backgroundColor?: string
+  textColor?: string
   borderColor?: string
   isDropTarget?: boolean
 }

@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import type { Artboard, ImageItem, Point, Size } from '../types'
 
-export function useArtboardManager() {
+export function useArtboardManager(onArtboardChildrenChange?: (artboardId: string) => void) {
   const artboards = ref<Artboard[]>([])
   const selectedArtboardIds = ref<Set<string>>(new Set())
 
@@ -22,20 +22,44 @@ export function useArtboardManager() {
   }
 
   const addToArtboard = (artboardId: string, itemIds: string[]) => {
+    console.log(`[ArtboardManager] Adding items to artboard ${artboardId}:`, itemIds)
     const artboard = artboards.value.find(a => a.id === artboardId)
     if (artboard) {
+      console.log(`[ArtboardManager] Found artboard, current children:`, artboard.children)
+      const newChildren = [...artboard.children]
       itemIds.forEach(id => {
-        if (!artboard.children.includes(id)) {
-          artboard.children.push(id)
+        if (!newChildren.includes(id)) {
+          newChildren.push(id)
+          console.log(`[ArtboardManager] Added ${id} to artboard`)
+        } else {
+          console.log(`[ArtboardManager] ${id} already in artboard`)
         }
       })
+      // Replace the array to trigger Vue reactivity
+      artboard.children = newChildren
+      console.log(`[ArtboardManager] Updated children:`, artboard.children)
+      
+      // Trigger color update callback if provided
+      if (onArtboardChildrenChange) {
+        console.log(`[ArtboardManager] Triggering color update for artboard ${artboardId}`)
+        onArtboardChildrenChange(artboardId)
+      }
+    } else {
+      console.log(`[ArtboardManager] Artboard not found: ${artboardId}`)
     }
   }
 
   const removeFromArtboard = (artboardId: string, itemIds: string[]) => {
     const artboard = artboards.value.find(a => a.id === artboardId)
     if (artboard) {
+      // Replace the array to trigger Vue reactivity
       artboard.children = artboard.children.filter(id => !itemIds.includes(id))
+      
+      // Trigger color update callback if provided
+      if (onArtboardChildrenChange) {
+        console.log(`[ArtboardManager] Triggering color update for artboard ${artboardId} after removal`)
+        onArtboardChildrenChange(artboardId)
+      }
     }
   }
 

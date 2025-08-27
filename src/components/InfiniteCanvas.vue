@@ -129,6 +129,7 @@ import { useTouch } from '../composables/useTouch'
 import { useInputMode } from '../composables/useInputMode'
 import { useImageCache } from '../composables/useImageCache'
 import { useArtboardManager } from '../composables/useArtboardManager'
+import { useArtboardColorManager } from '../composables/useArtboardColorManager'
 import { useHtmlExport } from '../composables/useHtmlExport'
 import { useSkylinePacker } from '../composables/useSkylinePacker'
 import type { Point, ImageItem, ResizeHandle, Viewport, Artboard } from '../types'
@@ -148,13 +149,23 @@ const showTidySuggestion = ref(false)
 const recentlyAddedImages = ref<ImageItem[]>([])
 
 const canvas = useCanvas(canvasRef)
-const imageManager = useImageManager()
+
+// Initialize artboard color manager first
+let updateArtboardColorsCallback: ((artboardId: string) => void) | undefined
+
+// Create artboard manager with color update callback
+const artboardManager = useArtboardManager((artboardId) => {
+  if (updateArtboardColorsCallback) {
+    updateArtboardColorsCallback(artboardId)
+  }
+})
+
+const imageManager = useImageManager(artboardManager.getArtboardAt, artboardManager.addToArtboard)
 const selection = useSelection()
 const dragResize = useDragResize()
 const touch = useTouch()
 const inputMode = useInputMode()
 const imageCache = useImageCache()
-const artboardManager = useArtboardManager()
 const { exportAsHtmlArchive } = useHtmlExport()
 const { tidyImages } = useSkylinePacker()
 
@@ -166,6 +177,10 @@ const { images, selectedImageIds, getImageAt, getImagesInRect, selectImage, clea
 const { isSelecting, selectionRect, startSelection, updateSelection, endSelection } = selection
 const { isDragging, isDraggingArtboard, isResizing, isResizingArtboard, startDrag, updateDrag, endDrag, updateDragArtboard, getResizeHandle, startResize, updateResize, endResize, startResizeArtboard, updateResizeArtboard, getCursor } = dragResize
 const { artboards, selectedArtboardIds, getArtboardAt, selectArtboard, clearArtboardSelection, autoResizeArtboard, createArtboard } = artboardManager
+
+// Initialize artboard color manager
+const { updateArtboardColors } = useArtboardColorManager(artboards, images)
+updateArtboardColorsCallback = updateArtboardColors
 
 const handlePointerDown = (e: PointerEvent) => {
   if (!canvasRef.value) return
@@ -959,7 +974,11 @@ const draw = () => {
   const sortedArtboards = [...artboards.value].sort((a, b) => a.zIndex - b.zIndex)
   for (const artboard of sortedArtboards) {
     // Artboard background
-    ctx.fillStyle = artboard.backgroundColor || '#ffffff'
+    const bgColor = artboard.backgroundColor || '#ffffff'
+    if (artboard.backgroundColor && artboard.backgroundColor !== 'rgba(255, 255, 255, 1)') {
+      console.log(`[Canvas] Drawing artboard ${artboard.id} with background: ${bgColor}`)
+    }
+    ctx.fillStyle = bgColor
     ctx.fillRect(
       artboard.position.x,
       artboard.position.y,
@@ -967,38 +986,65 @@ const draw = () => {
       artboard.size.height
     )
     
-    // Artboard grid
+    // Artboard grid (only draw if background is light enough)
     const gridSize = 20
-    ctx.strokeStyle = '#f0f0f0'
-    ctx.lineWidth = 0.5 / viewport.value.zoom
     
-    // Clip to artboard bounds
-    ctx.save()
-    ctx.beginPath()
-    ctx.rect(
-      artboard.position.x,
-      artboard.position.y,
-      artboard.size.width,
-      artboard.size.height
-    )
-    ctx.clip()
+    // Determine if we should draw a grid based on background color
+    let shouldDrawGrid = true
+    let gridColor = 'rgba(0, 0, 0, 0.05)' // Default subtle grid
     
-    // Draw grid lines
-    for (let x = artboard.position.x; x <= artboard.position.x + artboard.size.width; x += gridSize) {
-      ctx.beginPath()
-      ctx.moveTo(x, artboard.position.y)
-      ctx.lineTo(x, artboard.position.y + artboard.size.height)
-      ctx.stroke()
+    if (artboard.backgroundColor && artboard.backgroundColor !== 'rgba(255, 255, 255, 1)') {
+      // Parse the background color to determine if it's light or dark
+      const match = artboard.backgroundColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+      if (match) {
+        const [_, r, g, b] = match.map(Number)
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        
+        if (luminance > 0.7) {
+          // Light background - use dark grid
+          gridColor = 'rgba(0, 0, 0, 0.08)'
+        } else if (luminance > 0.3) {
+          // Medium background - use contrasting grid
+          gridColor = luminance > 0.5 ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)'
+        } else {
+          // Dark background - use light grid
+          gridColor = 'rgba(255, 255, 255, 0.08)'
+        }
+      }
     }
     
-    for (let y = artboard.position.y; y <= artboard.position.y + artboard.size.height; y += gridSize) {
+    if (shouldDrawGrid) {
+      ctx.strokeStyle = gridColor
+      ctx.lineWidth = 0.5 / viewport.value.zoom
+      
+      // Clip to artboard bounds
+      ctx.save()
       ctx.beginPath()
-      ctx.moveTo(artboard.position.x, y)
-      ctx.lineTo(artboard.position.x + artboard.size.width, y)
-      ctx.stroke()
+      ctx.rect(
+        artboard.position.x,
+        artboard.position.y,
+        artboard.size.width,
+        artboard.size.height
+      )
+      ctx.clip()
+      
+      // Draw grid lines
+      for (let x = artboard.position.x; x <= artboard.position.x + artboard.size.width; x += gridSize) {
+        ctx.beginPath()
+        ctx.moveTo(x, artboard.position.y)
+        ctx.lineTo(x, artboard.position.y + artboard.size.height)
+        ctx.stroke()
+      }
+      
+      for (let y = artboard.position.y; y <= artboard.position.y + artboard.size.height; y += gridSize) {
+        ctx.beginPath()
+        ctx.moveTo(artboard.position.x, y)
+        ctx.lineTo(artboard.position.x + artboard.size.width, y)
+        ctx.stroke()
+      }
+      
+      ctx.restore()
     }
-    
-    ctx.restore()
     
     // Artboard border
     ctx.strokeStyle = artboard.isDropTarget ? '#3b82f6' : (artboard.borderColor || '#e0e0e0')
@@ -1011,7 +1057,7 @@ const draw = () => {
     )
     
     // Artboard name (inside the artboard, top-left corner)
-    ctx.fillStyle = '#666'
+    ctx.fillStyle = artboard.textColor || '#666'
     ctx.font = `${12 / viewport.value.zoom}px sans-serif`
     ctx.textBaseline = 'top'
     ctx.fillText(

@@ -1,9 +1,12 @@
 import { ref, computed } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
-import type { ImageItem, Point, Size } from '../types'
+import type { ImageItem, Point, Size, Artboard } from '../types'
 import { useSettingsStore } from '../stores/settings'
 
-export function useImageManager() {
+export function useImageManager(
+  getArtboardAt?: (point: Point) => Artboard | null,
+  addToArtboard?: (artboardId: string, itemIds: string[]) => void
+) {
   const settingsStore = useSettingsStore()
   const images = ref<ImageItem[]>([])
   const selectedImageIds = ref<Set<string>>(new Set())
@@ -28,14 +31,16 @@ export function useImageManager() {
           // Get scaled dimensions
           const scaledSize = settingsStore.getScaledDimensions(img.width, img.height)
           
+          const imagePosition = { 
+            x: position.x + staggerOffset, 
+            y: position.y + staggerOffset 
+          }
+          
           const imageItem: ImageItem = {
             id: uuidv4(),
             filename: file.name,
             dataUrl,
-            position: { 
-              x: position.x + staggerOffset, 
-              y: position.y + staggerOffset 
-            },
+            position: imagePosition,
             size: scaledSize,
             originalSize: { width: img.width, height: img.height },
             rotation: 0,
@@ -43,7 +48,25 @@ export function useImageManager() {
             selected: false
           }
           
+          // Add image to the list first
           images.value.push(imageItem)
+          
+          // Then check if image is placed on an artboard
+          if (getArtboardAt) {
+            const imageCenterPoint = {
+              x: imagePosition.x + scaledSize.width / 2,
+              y: imagePosition.y + scaledSize.height / 2
+            }
+            const targetArtboard = getArtboardAt(imageCenterPoint)
+            if (targetArtboard) {
+              imageItem.artboardId = targetArtboard.id
+              console.log(`[ImageManager] Image ${imageItem.id} auto-assigned to artboard ${targetArtboard.id}`)
+              // Add to artboard's children array after image is in the list
+              if (addToArtboard) {
+                addToArtboard(targetArtboard.id, [imageItem.id])
+              }
+            }
+          }
           resolve(imageItem)
         }
         
@@ -73,14 +96,16 @@ export function useImageManager() {
         // Get scaled dimensions
         const scaledSize = settingsStore.getScaledDimensions(img.width, img.height)
         
+        const imagePosition = { 
+          x: position.x + staggerOffset, 
+          y: position.y + staggerOffset 
+        }
+        
         const imageItem: ImageItem = {
           id: uuidv4(),
           filename,
           dataUrl,
-          position: { 
-            x: position.x + staggerOffset, 
-            y: position.y + staggerOffset 
-          },
+          position: imagePosition,
           size: scaledSize,
           originalSize: { width: img.width, height: img.height },
           rotation: 0,
@@ -88,7 +113,25 @@ export function useImageManager() {
           selected: false
         }
         
+        // Add image to the list first
         images.value.push(imageItem)
+        
+        // Then check if image is placed on an artboard
+        if (getArtboardAt) {
+          const imageCenterPoint = {
+            x: imagePosition.x + scaledSize.width / 2,
+            y: imagePosition.y + scaledSize.height / 2
+          }
+          const targetArtboard = getArtboardAt(imageCenterPoint)
+          if (targetArtboard) {
+            imageItem.artboardId = targetArtboard.id
+            console.log(`[ImageManager] Image ${imageItem.id} auto-assigned to artboard ${targetArtboard.id}`)
+            // Add to artboard's children array after image is in the list
+            if (addToArtboard) {
+              addToArtboard(targetArtboard.id, [imageItem.id])
+            }
+          }
+        }
         resolve(imageItem)
       }
       
